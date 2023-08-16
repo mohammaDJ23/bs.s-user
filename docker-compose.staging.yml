@@ -5,6 +5,7 @@ services:
     env_file:
       - /root/config/s-user.env.txt
     container_name: s-user
+    restart: always
     ports:
       - 3002:3002
     networks:
