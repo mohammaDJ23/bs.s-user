@@ -1,16 +1,13 @@
 version: '3.8'
-
 services:
-  user:
-    build:
-      context: .
-      dockerfile: Dockerfile.prod
+  s-user-prod:
+    image: ${DOCKER_USERNAME}/s-user-prod
     env_file:
-      - /root/config/user.env.txt
-    container_name: user
+      - /root/config/s-user-prod.env.txt
+    container_name: s-user-prod
     restart: always
     ports:
-      - 3002:3002
+      - ${PORT}:${PORT}
     networks:
       - services_app-network
 
