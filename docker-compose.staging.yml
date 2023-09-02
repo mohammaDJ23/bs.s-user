@@ -1,13 +1,13 @@
 version: '3.8'
 services:
   s-user-staging:
-    image: mohammadnowresideh1997/s-user-staging
+    image: ${DOCKER_USERNAME}/s-user-staging
     env_file:
       - /root/config/s-user-staging.env.txt
     container_name: s-user-staging
     restart: always
     ports:
-      - 3002:3002
+      - ${PORT}:${PORT}
     networks:
       - services_app-network
 
