@@ -1,4 +1,4 @@
-FROM node:18.10.0-alpine
+FROM --platform=linux/amd64 node:18.10.0-alpine
 
 WORKDIR /usr/src/app
 
@@ -12,6 +12,6 @@ COPY . .
 
 RUN npm run build
 
-EXPOSE 3002
+EXPOSE 4002
 
 CMD [ "npm", "run", "start:prod" ]
