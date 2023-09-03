@@ -53,6 +53,7 @@ jobs:
           command_timeout: 60m
           script: |
             cd app
-            npm run docker:compose:s-user:prod:down
+            npm run docker:stop:s-user:prod
+            npm run docker:rm:s-user:prod
             npm run docker:rmi:s-user:prod
-            npm run docker:compose:s-user:prod:up
+            npm run docker:compose:up:s-user:prod
