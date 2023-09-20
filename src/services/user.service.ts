@@ -173,9 +173,20 @@ export class UserService {
     context: RmqContext,
   ): Promise<User> {
     try {
+      console.log('in the user service');
+      console.log('database info', {
+        databaseHost: process.env.DATABASE_HOST,
+        databasePort: process.env.DATABASE_PORT,
+        databaseName: process.env.DATABASE_NAME,
+        databaseUsername: process.env.DATABASE_USERNAME,
+        databasePassword: process.env.DATABASE_PASSWORD,
+      });
+      console.log('recived email', email);
       const user = await this.findByEmail(email);
+      console.log('recived data from user database', user);
       if (!user) throw new NotFoundException('Could not found the user');
       this.rabbitmqService.applyAcknowledgment(context);
+      console.log('return user data from user serive');
       return user;
     } catch (error) {
       throw new RpcException(error);
