@@ -10,7 +10,6 @@ import { APP_FILTER, APP_PIPE } from '@nestjs/core';
 import { PassportModule } from '@nestjs/passport';
 import { JwtModule } from '@nestjs/jwt';
 import { GatewayController, MessagePatternController } from '../controllers';
-import { RabbitMqQueue, RabbitMqServices } from '../types';
 import { UserConnectionGateWay } from 'src/gateways';
 import { redisStore } from 'cache-manager-redis-yet';
 
@@ -30,23 +29,11 @@ import { redisStore } from 'cache-manager-redis-yet';
     }),
     ClientsModule.register([
       {
-        name: RabbitMqServices.USER,
+        name: process.env.USER_RABBITMQ_SERVICE,
         transport: Transport.RMQ,
         options: {
           urls: [process.env.RABBITMQ_URL],
-          queue: RabbitMqQueue.REQUEST_TRACKER,
-          queueOptions: {
-            durable: true,
-          },
-          noAck: false,
-        },
-      },
-      {
-        name: RabbitMqServices.USER,
-        transport: Transport.RMQ,
-        options: {
-          urls: [process.env.RABBITMQ_URL],
-          queue: RabbitMqQueue.BANK,
+          queue: process.env.BANK_RABBITMQ_QUEUE,
           queueOptions: {
             durable: true,
           },

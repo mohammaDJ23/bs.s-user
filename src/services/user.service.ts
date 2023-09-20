@@ -17,7 +17,7 @@ import {
 import { User } from '../entities';
 import { hash } from 'bcryptjs';
 import { ClientProxy, RmqContext, RpcException } from '@nestjs/microservices';
-import { RabbitMqServices, UserRoles, UpdatedUserPartialObj } from '../types';
+import { UserRoles, UpdatedUserPartialObj } from '../types';
 import { RabbitmqService } from './rabbitmq.service';
 import { UserListFiltersDto } from 'src/dtos/userListFilters.dto';
 import { DeletedUserListFiltersDto } from 'src/dtos/deletedUserListFilters.dto';
@@ -26,7 +26,8 @@ import { DeletedUserListFiltersDto } from 'src/dtos/deletedUserListFilters.dto';
 export class UserService {
   constructor(
     @InjectRepository(User) private readonly userRepository: Repository<User>,
-    @Inject(RabbitMqServices.USER) private readonly clientProxy: ClientProxy,
+    @Inject(process.env.USER_RABBITMQ_SERVICE)
+    private readonly clientProxy: ClientProxy,
     private readonly rabbitmqService: RabbitmqService,
   ) {}
 
@@ -80,10 +81,11 @@ export class UserService {
     try {
       const user = await this.findByIdOrFail(payload.id);
       const updatedUser = await this.updateSameUser(payload, user);
-      this.rabbitmqService.applyAcknowledgment(context);
       return updatedUser;
     } catch (error) {
       throw new RpcException(error);
+    } finally {
+      this.rabbitmqService.applyAcknowledgment(context);
     }
   }
 
@@ -146,10 +148,11 @@ export class UserService {
   ): Promise<User> {
     try {
       const user = await this.findByIdOrFail(id);
-      this.rabbitmqService.applyAcknowledgment(context);
       return user;
     } catch (error) {
       throw new RpcException(error);
+    } finally {
+      this.rabbitmqService.applyAcknowledgment(context);
     }
   }
 
@@ -173,23 +176,13 @@ export class UserService {
     context: RmqContext,
   ): Promise<User> {
     try {
-      console.log('in the user service');
-      console.log('database info', {
-        databaseHost: process.env.DATABASE_HOST,
-        databasePort: process.env.DATABASE_PORT,
-        databaseName: process.env.DATABASE_NAME,
-        databaseUsername: process.env.DATABASE_USERNAME,
-        databasePassword: process.env.DATABASE_PASSWORD,
-      });
-      console.log('recived email', email);
       const user = await this.findByEmail(email);
-      console.log('recived data from user database', user);
       if (!user) throw new NotFoundException('Could not found the user');
-      this.rabbitmqService.applyAcknowledgment(context);
-      console.log('return user data from user serive');
       return user;
     } catch (error) {
       throw new RpcException(error);
+    } finally {
+      this.rabbitmqService.applyAcknowledgment(context);
     }
   }
 
