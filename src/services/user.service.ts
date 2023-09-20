@@ -17,7 +17,7 @@ import {
 import { User } from '../entities';
 import { hash } from 'bcryptjs';
 import { ClientProxy, RmqContext, RpcException } from '@nestjs/microservices';
-import { RabbitMqServices, UserRoles, UpdatedUserPartialObj } from '../types';
+import { UserRoles, UpdatedUserPartialObj } from '../types';
 import { RabbitmqService } from './rabbitmq.service';
 import { UserListFiltersDto } from 'src/dtos/userListFilters.dto';
 import { DeletedUserListFiltersDto } from 'src/dtos/deletedUserListFilters.dto';
@@ -26,7 +26,8 @@ import { DeletedUserListFiltersDto } from 'src/dtos/deletedUserListFilters.dto';
 export class UserService {
   constructor(
     @InjectRepository(User) private readonly userRepository: Repository<User>,
-    @Inject(RabbitMqServices.USER) private readonly clientProxy: ClientProxy,
+    @Inject(process.env.USER_RABBITMQ_SERVICE)
+    private readonly clientProxy: ClientProxy,
     private readonly rabbitmqService: RabbitmqService,
   ) {}
 
