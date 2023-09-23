@@ -3,9 +3,10 @@ import {
   ConflictException,
   NotFoundException,
   Inject,
+  forwardRef,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Brackets, Repository } from 'typeorm';
+import { Brackets, EntityManager, Repository } from 'typeorm';
 import {
   CreateUserDto,
   UpdateUserByUserDto,
@@ -21,6 +22,7 @@ import { UserRoles, UpdatedUserPartialObj } from '../types';
 import { RabbitmqService } from './rabbitmq.service';
 import { UserListFiltersDto } from 'src/dtos/userListFilters.dto';
 import { DeletedUserListFiltersDto } from 'src/dtos/deletedUserListFilters.dto';
+import { RestoreUserTransaction } from 'src/transactions';
 
 @Injectable()
 export class UserService {
@@ -29,6 +31,8 @@ export class UserService {
     @Inject(process.env.USER_RABBITMQ_SERVICE)
     private readonly clientProxy: ClientProxy,
     private readonly rabbitmqService: RabbitmqService,
+    @Inject(forwardRef(() => RestoreUserTransaction))
+    private readonly restoreUserTransaction: RestoreUserTransaction,
   ) {}
 
   async create(payload: CreateUserDto, user: User): Promise<User> {
@@ -380,24 +384,23 @@ export class UserService {
     return response;
   }
 
-  async restoreOne(id: number, user: User): Promise<User> {
-    const restoredUser = await this.userRepository
-      .createQueryBuilder('public.user')
+  restoreOneWithEntityManager(
+    id: number,
+    user: User,
+    entityManager: EntityManager,
+  ): Promise<User> {
+    return entityManager
+      .createQueryBuilder(User, 'public.user')
       .restore()
       .where('public.user.id = :userId')
       .andWhere('public.user.deleted_at IS NOT NULL')
       .andWhere('public.user.created_by = :currentUserId')
       .setParameters({ userId: id, currentUserId: user.id })
       .returning('*')
-      .exe();
+      .exe({ noEffectError: 'Could not restore the user.' });
+  }
 
-    await this.clientProxy
-      .emit('restored_user', {
-        currentUser: user,
-        restoredUser,
-      })
-      .toPromise();
-
-    return restoredUser;
+  async restoreOne(id: number, user: User): Promise<User> {
+    return this.restoreUserTransaction.run({ id, user });
   }
 }

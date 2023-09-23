@@ -69,3 +69,8 @@ export interface CacheKeyMetadata {
   key: CacheKeys;
   options: CacheKeyOptions;
 }
+
+export interface RestoreUserTransactionInput {
+  id: number;
+  user: User;
+}

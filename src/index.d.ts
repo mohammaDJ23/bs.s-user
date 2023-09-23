@@ -9,6 +9,9 @@ interface CustomQueryBuilder<Entity> {
 
 interface ExeOptions {
   camelcase?: boolean;
+  noEffectError?: string;
+  forMicroservice?: boolean;
+  resultType?: 'object' | 'array';
 }
 
 declare module 'typeorm/query-builder/SoftDeleteQueryBuilder' {
