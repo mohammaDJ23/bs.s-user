@@ -1,14 +1,14 @@
 import { Inject, Injectable, forwardRef } from '@nestjs/common';
-import { ClientProxy } from '@nestjs/microservices';
-import { User } from 'src/entities';
 import { UserService } from 'src/services';
-import { RestoreUserObj } from 'src/types';
+import { DeleteUserObj } from 'src/types';
 import { DataSource, EntityManager } from 'typeorm';
 import { BaseTransaction } from './base.transaction';
+import { ClientProxy } from '@nestjs/microservices';
+import { User } from 'src/entities';
 
 @Injectable()
-export class RestoreUserTransaction extends BaseTransaction<
-  RestoreUserObj,
+export class DeleteUserTransaction extends BaseTransaction<
+  DeleteUserObj,
   User
 > {
   constructor(
@@ -22,17 +22,17 @@ export class RestoreUserTransaction extends BaseTransaction<
   }
 
   protected async execute(
-    data: RestoreUserObj,
+    data: DeleteUserObj,
     manager: EntityManager,
   ): Promise<User> {
-    const restoredUser = await this.userService.restoreOneWithEntityManager(
+    const deletedUser = await this.userService.deleteWithEntityManager(
       data.id,
       data.user.id,
       manager,
     );
     await this.clientProxy
-      .send('restored_user', { currentUser: data.user, restoredUser })
+      .send('deleted_user', { deletedUser, currentUser: data.user })
       .toPromise();
-    return restoredUser;
+    return deletedUser;
   }
 }

@@ -70,7 +70,12 @@ export interface CacheKeyMetadata {
   options: CacheKeyOptions;
 }
 
-export interface RestoreUserTransactionInput {
+export interface RestoreUserObj {
+  id: number;
+  user: User;
+}
+
+export interface DeleteUserObj {
   id: number;
   user: User;
 }

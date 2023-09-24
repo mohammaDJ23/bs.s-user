@@ -22,7 +22,10 @@ import { UserRoles, UpdatedUserPartialObj } from '../types';
 import { RabbitmqService } from './rabbitmq.service';
 import { UserListFiltersDto } from 'src/dtos/userListFilters.dto';
 import { DeletedUserListFiltersDto } from 'src/dtos/deletedUserListFilters.dto';
-import { RestoreUserTransaction } from 'src/transactions';
+import {
+  DeleteUserTransaction,
+  RestoreUserTransaction,
+} from 'src/transactions';
 
 @Injectable()
 export class UserService {
@@ -33,6 +36,8 @@ export class UserService {
     private readonly rabbitmqService: RabbitmqService,
     @Inject(forwardRef(() => RestoreUserTransaction))
     private readonly restoreUserTransaction: RestoreUserTransaction,
+    @Inject(forwardRef(() => DeleteUserTransaction))
+    private readonly deleteUserTransaction: DeleteUserTransaction,
   ) {}
 
   async create(payload: CreateUserDto, user: User): Promise<User> {
@@ -118,13 +123,24 @@ export class UserService {
     return user;
   }
 
-  async delete(id: number, currentUser: User): Promise<User> {
-    const user = await this.findByIdOrFail(id);
-    await this.userRepository.softRemove(user);
-    await this.clientProxy
-      .emit('deleted_user', { currentUser, deletedUser: user })
-      .toPromise();
-    return user;
+  deleteWithEntityManager(
+    deleteUserId: number,
+    currentUserId: number,
+    entityManager: EntityManager,
+  ): Promise<User> {
+    return entityManager
+      .createQueryBuilder(User, 'public.user')
+      .softDelete()
+      .where('public.user.id = :deleteUserId')
+      .andWhere('public.user.deleted_at IS NULL')
+      .andWhere('public.user.created_by = :currentUserId')
+      .setParameters({ deleteUserId, currentUserId })
+      .returning('*')
+      .exe({ noEffectError: 'Could not delete the user.' });
+  }
+
+  async delete(id: number, user: User): Promise<User> {
+    return this.deleteUserTransaction.run({ id, user });
   }
 
   async findOne(id: number): Promise<User> {
@@ -385,17 +401,17 @@ export class UserService {
   }
 
   restoreOneWithEntityManager(
-    id: number,
-    user: User,
+    restoreUserId: number,
+    currentUserId: number,
     entityManager: EntityManager,
   ): Promise<User> {
     return entityManager
       .createQueryBuilder(User, 'public.user')
       .restore()
-      .where('public.user.id = :userId')
+      .where('public.user.id = :restoreUserId')
       .andWhere('public.user.deleted_at IS NOT NULL')
       .andWhere('public.user.created_by = :currentUserId')
-      .setParameters({ userId: id, currentUserId: user.id })
+      .setParameters({ restoreUserId, currentUserId })
       .returning('*')
       .exe({ noEffectError: 'Could not restore the user.' });
   }

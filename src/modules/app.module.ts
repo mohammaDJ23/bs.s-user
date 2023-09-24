@@ -12,7 +12,10 @@ import { JwtModule } from '@nestjs/jwt';
 import { GatewayController, MessagePatternController } from '../controllers';
 import { UserConnectionGateWay } from 'src/gateways';
 import { redisStore } from 'cache-manager-redis-yet';
-import { RestoreUserTransaction } from 'src/transactions';
+import {
+  DeleteUserTransaction,
+  RestoreUserTransaction,
+} from 'src/transactions';
 
 @Module({
   imports: [
@@ -72,6 +75,7 @@ import { RestoreUserTransaction } from 'src/transactions';
     JwtStrategy,
     RabbitmqService,
     RestoreUserTransaction,
+    DeleteUserTransaction,
     { provide: APP_FILTER, useClass: AllExceptionFilter },
     {
       provide: APP_PIPE,
