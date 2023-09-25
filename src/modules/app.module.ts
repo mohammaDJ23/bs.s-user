@@ -9,7 +9,7 @@ import { AllExceptionFilter } from '../filters';
 import { APP_FILTER, APP_PIPE } from '@nestjs/core';
 import { PassportModule } from '@nestjs/passport';
 import { JwtModule } from '@nestjs/jwt';
-import { GatewayController, MessagePatternController } from '../controllers';
+import { UserMessagePatternController, userController } from '../controllers';
 import { UserConnectionGateWay } from 'src/gateways';
 import { redisStore } from 'cache-manager-redis-yet';
 import {
@@ -71,7 +71,7 @@ import {
       signOptions: { expiresIn: process.env.JWT_EXPIRATION },
     }),
   ],
-  controllers: [GatewayController, MessagePatternController],
+  controllers: [userController, UserMessagePatternController],
   providers: [
     UserService,
     JwtStrategy,

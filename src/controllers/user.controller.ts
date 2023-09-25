@@ -57,7 +57,7 @@ import {
 @UseGuards(JwtGuard)
 @Controller('/api/v1/user')
 @ApiTags('/api/v1/user')
-export class GatewayController {
+export class userController {
   constructor(private readonly userService: UserService) {}
 
   @Post('create')
@@ -91,7 +91,7 @@ export class GatewayController {
   @ApiResponse({ status: HttpStatus.CONFLICT, type: ErrorDto })
   @ApiResponse({ status: HttpStatus.BAD_REQUEST, type: ErrorDto })
   @ApiResponse({ status: HttpStatus.INTERNAL_SERVER_ERROR, type: ErrorDto })
-  update(
+  updateByUser(
     @Body() body: UpdateUserByUserDto,
     @CurrentUser() user: User,
   ): Promise<User> {
@@ -186,8 +186,8 @@ export class GatewayController {
   @ApiResponse({ status: HttpStatus.UNAUTHORIZED, type: ErrorDto })
   @ApiResponse({ status: HttpStatus.NOT_FOUND, type: ErrorDto })
   @ApiResponse({ status: HttpStatus.INTERNAL_SERVER_ERROR, type: ErrorDto })
-  getUserQuantities(): Promise<UserQuantitiesDto> {
-    return this.userService.getUserQuantities();
+  quantities(): Promise<UserQuantitiesDto> {
+    return this.userService.quantities();
   }
 
   @Get('deleted-quantities')
@@ -200,8 +200,8 @@ export class GatewayController {
   @ApiResponse({ status: HttpStatus.UNAUTHORIZED, type: ErrorDto })
   @ApiResponse({ status: HttpStatus.NOT_FOUND, type: ErrorDto })
   @ApiResponse({ status: HttpStatus.INTERNAL_SERVER_ERROR, type: ErrorDto })
-  getDeletedUserQuantities(): Promise<UserQuantitiesDto> {
-    return this.userService.getDeletedUserQuantities();
+  quantitiesDeleted(): Promise<UserQuantitiesDto> {
+    return this.userService.quantitiesDeleted();
   }
 
   @Get('last-week')
@@ -214,8 +214,8 @@ export class GatewayController {
   @ApiResponse({ status: HttpStatus.UNAUTHORIZED, type: ErrorDto })
   @ApiResponse({ status: HttpStatus.NOT_FOUND, type: ErrorDto })
   @ApiResponse({ status: HttpStatus.INTERNAL_SERVER_ERROR, type: ErrorDto })
-  getLastWeekUsers(): Promise<LastWeekDto[]> {
-    return this.userService.lastWeekUsers();
+  lastWeek(): Promise<LastWeekDto[]> {
+    return this.userService.lastWeek();
   }
 
   @Get(':id')
@@ -229,8 +229,8 @@ export class GatewayController {
   @ApiResponse({ status: HttpStatus.UNAUTHORIZED, type: ErrorDto })
   @ApiResponse({ status: HttpStatus.NOT_FOUND, type: ErrorDto })
   @ApiResponse({ status: HttpStatus.INTERNAL_SERVER_ERROR, type: ErrorDto })
-  findOne(@Param('id', ParseIntPipe) id: number): Promise<User> {
-    return this.userService.findOne(id);
+  findByIdOrFail(@Param('id', ParseIntPipe) id: number): Promise<User> {
+    return this.userService.findByIdOrFail(id);
   }
 
   @Get(':id/deleted')
@@ -244,10 +244,10 @@ export class GatewayController {
   @ApiResponse({ status: HttpStatus.UNAUTHORIZED, type: ErrorDto })
   @ApiResponse({ status: HttpStatus.NOT_FOUND, type: ErrorDto })
   @ApiResponse({ status: HttpStatus.INTERNAL_SERVER_ERROR, type: ErrorDto })
-  async findDeletedOne(
+  async findByIdDeleted(
     @Param('id', ParseIntPipe) id: number,
   ): Promise<DeletedUserDto> {
-    return this.userService.findDeletedOne(id);
+    return this.userService.findByIdDeleted(id);
   }
 
   @Post(':id/restore')
@@ -261,10 +261,10 @@ export class GatewayController {
   @ApiResponse({ status: HttpStatus.UNAUTHORIZED, type: ErrorDto })
   @ApiResponse({ status: HttpStatus.NOT_FOUND, type: ErrorDto })
   @ApiResponse({ status: HttpStatus.INTERNAL_SERVER_ERROR, type: ErrorDto })
-  restoreOne(
+  restore(
     @Param('id', ParseIntPipe) id: number,
     @CurrentUser() user: User,
   ): Promise<User> {
-    return this.userService.restoreOne(id, user);
+    return this.userService.restore(id, user);
   }
 }

@@ -18,7 +18,7 @@ import {
 } from '../dtos';
 import { User } from '../entities';
 import { hash } from 'bcryptjs';
-import { ClientProxy, RmqContext, RpcException } from '@nestjs/microservices';
+import { RmqContext, RpcException } from '@nestjs/microservices';
 import { UserRoles, UpdatedUserPartialObj } from '../types';
 import { RabbitmqService } from './rabbitmq.service';
 import { UserListFiltersDto } from 'src/dtos/userListFilters.dto';
@@ -34,8 +34,6 @@ import {
 export class UserService {
   constructor(
     @InjectRepository(User) private readonly userRepository: Repository<User>,
-    @Inject(process.env.USER_RABBITMQ_SERVICE)
-    private readonly clientProxy: ClientProxy,
     private readonly rabbitmqService: RabbitmqService,
     @Inject(forwardRef(() => RestoreUserTransaction))
     private readonly restoreUserTransaction: RestoreUserTransaction,
@@ -130,17 +128,20 @@ export class UserService {
     });
   }
 
-  async updatePartialForMicroservices(
+  async updateByMicroservice(
     payload: UpdatedUserPartialObj,
     context: RmqContext,
   ): Promise<User> {
     try {
       const user = await this.findByIdOrFail(payload.id);
-      return this.updateUserTransaction.run({ payload, user });
+      const updatedUser = await this.updateUserTransaction.run({
+        payload,
+        user,
+      });
+      this.rabbitmqService.applyAcknowledgment(context);
+      return updatedUser;
     } catch (error) {
       throw new RpcException(error);
-    } finally {
-      this.rabbitmqService.applyAcknowledgment(context);
     }
   }
 
@@ -164,14 +165,11 @@ export class UserService {
     return this.deleteUserTransaction.run({ id, user });
   }
 
-  async findOne(id: number): Promise<User> {
-    return this.findByIdOrFail(id);
-  }
-
   findById(id: number): Promise<User> {
     return this.userRepository
       .createQueryBuilder('user')
-      .where('user.id = :id', { id })
+      .where('user.id = :id')
+      .setParameters({ id })
       .getOne();
   }
 
@@ -183,13 +181,22 @@ export class UserService {
       .getOneOrFail();
   }
 
-  async findByIdForMicroservices(
+  async findByIdOrFailByMicroservice(
     id: number,
     context: RmqContext,
   ): Promise<User> {
     try {
-      const user = await this.findByIdOrFail(id);
-      return user;
+      return this.findByIdOrFail(id);
+    } catch (error) {
+      throw new RpcException(error);
+    } finally {
+      this.rabbitmqService.applyAcknowledgment(context);
+    }
+  }
+
+  async findByIdByMicroservice(id: number, context: RmqContext): Promise<User> {
+    try {
+      return this.findById(id);
     } catch (error) {
       throw new RpcException(error);
     } finally {
@@ -200,26 +207,47 @@ export class UserService {
   findByEmail(email: string): Promise<User> {
     return this.userRepository
       .createQueryBuilder('user')
-      .where('user.email = :email', { email })
+      .where('user.email = :email')
+      .setParameters({ email })
       .getOne();
+  }
+
+  findByEmailOrFail(email: string): Promise<User> {
+    return this.userRepository
+      .createQueryBuilder('user')
+      .where('user.email = :email')
+      .setParameters({ email })
+      .getOneOrFail();
   }
 
   findByEmailWithDeleted(email: string): Promise<User> {
     return this.userRepository
       .createQueryBuilder('user')
       .withDeleted()
-      .where('user.email = :email', { email })
+      .where('user.email = :email')
+      .setParameters({ email })
       .getOne();
   }
 
-  async findByEmailForMicroservices(
+  async findByEmailOrFailByMicroservice(
     email: string,
     context: RmqContext,
   ): Promise<User> {
     try {
-      const user = await this.findByEmail(email);
-      if (!user) throw new NotFoundException('Could not found the user');
-      return user;
+      return this.findByEmailOrFail(email);
+    } catch (error) {
+      throw new RpcException(error);
+    } finally {
+      this.rabbitmqService.applyAcknowledgment(context);
+    }
+  }
+
+  async findByEmailByMicroservice(
+    email: string,
+    context: RmqContext,
+  ): Promise<User> {
+    try {
+      return this.findByEmail(email);
     } catch (error) {
       throw new RpcException(error);
     } finally {
@@ -264,7 +292,7 @@ export class UserService {
       .getManyAndCount();
   }
 
-  getUserQuantities(): Promise<UserQuantitiesDto> {
+  quantities(): Promise<UserQuantitiesDto> {
     return this.userRepository
       .createQueryBuilder('user')
       .select('COALESCE(COUNT(user.id), 0)::INTEGER', 'quantities')
@@ -288,7 +316,7 @@ export class UserService {
       .getRawOne();
   }
 
-  getDeletedUserQuantities(): Promise<UserQuantitiesDto> {
+  quantitiesDeleted(): Promise<UserQuantitiesDto> {
     return this.userRepository
       .createQueryBuilder('user')
       .select('COALESCE(COUNT(user.id), 0)::INTEGER', 'quantities')
@@ -314,7 +342,7 @@ export class UserService {
       .getRawOne();
   }
 
-  lastWeekUsers(): Promise<LastWeekDto[]> {
+  lastWeek(): Promise<LastWeekDto[]> {
     return this.userRepository.query(
       `
         WITH lastWeek (date) AS (
@@ -384,7 +412,7 @@ export class UserService {
       .getManyAndCount();
   }
 
-  async findDeletedOne(id: number): Promise<DeletedUserDto> {
+  async findByIdDeleted(id: number): Promise<DeletedUserDto> {
     const [response]: DeletedUserDto[] = await this.userRepository.query(
       `
         SELECT
@@ -437,7 +465,7 @@ export class UserService {
       .exe({ noEffectError: 'Could not restore the user.' });
   }
 
-  async restoreOne(id: number, user: User): Promise<User> {
+  async restore(id: number, user: User): Promise<User> {
     return this.restoreUserTransaction.run({ id, user });
   }
 }

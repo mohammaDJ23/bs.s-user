@@ -10,7 +10,7 @@ import { User } from 'src/entities';
 import { UpdatedUserPartialObj } from 'src/types';
 
 @Controller('/message-pattenrs/v1/user')
-export class MessagePatternController {
+export class UserMessagePatternController {
   constructor(private readonly userService: UserService) {}
 
   @MessagePattern('update_user_partial')
@@ -18,12 +18,12 @@ export class MessagePatternController {
     @Payload() payload: UpdatedUserPartialObj,
     @Ctx() context: RmqContext,
   ): Promise<User> {
-    return this.userService.updatePartialForMicroservices(payload, context);
+    return this.userService.updateByMicroservice(payload, context);
   }
 
   @MessagePattern('find_user_by_id')
   findById(@Payload() id: number, @Ctx() context: RmqContext): Promise<User> {
-    return this.userService.findByIdForMicroservices(id, context);
+    return this.userService.findByIdByMicroservice(id, context);
   }
 
   @MessagePattern('find_user_by_email')
@@ -31,6 +31,6 @@ export class MessagePatternController {
     @Payload() email: string,
     @Ctx() context: RmqContext,
   ): Promise<User> {
-    return this.userService.findByEmailForMicroservices(email, context);
+    return this.userService.findByEmailByMicroservice(email, context);
   }
 }

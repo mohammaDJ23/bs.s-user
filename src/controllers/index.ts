@@ -1,2 +1,2 @@
-export * from './gateway.controller';
-export * from './messagePatterns.controller';
+export * from './user.controller';
+export * from './userMessagePatterns.controller';
