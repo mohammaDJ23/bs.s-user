@@ -1,6 +1,6 @@
 import { Inject, Injectable, forwardRef } from '@nestjs/common';
 import { UserService } from 'src/services';
-import { CreateUserObj, UpdateUserObj } from 'src/types';
+import { CreateUserObj } from 'src/types';
 import { DataSource, EntityManager } from 'typeorm';
 import { BaseTransaction } from './base.transaction';
 import { ClientProxy } from '@nestjs/microservices';
