@@ -1,6 +1,10 @@
 import { Request as Req } from 'express';
 import { User } from 'src/entities';
 
+export interface CurrentUserObj {
+  currentUser: User;
+}
+
 export interface EncryptedUserObj {
   id: number;
   email: string;
@@ -20,9 +24,7 @@ export interface UpdatedUserPartialObj extends Partial<User> {
   id: number;
 }
 
-export interface Request extends Req {
-  currentUser: User;
-}
+export interface Request extends Req, CurrentUserObj {}
 
 export type Exception =
   | {
@@ -77,5 +79,10 @@ export interface RestoreUserObj {
 
 export interface DeleteUserObj {
   id: number;
+  user: User;
+}
+
+export interface UpdateUserObj extends Partial<CurrentUserObj> {
+  payload: Partial<User>;
   user: User;
 }

@@ -4,6 +4,7 @@ import {
   NotFoundException,
   Inject,
   forwardRef,
+  BadRequestException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Brackets, EntityManager, Repository } from 'typeorm';
@@ -25,6 +26,7 @@ import { DeletedUserListFiltersDto } from 'src/dtos/deletedUserListFilters.dto';
 import {
   DeleteUserTransaction,
   RestoreUserTransaction,
+  UpdateUserTransaction,
 } from 'src/transactions';
 
 @Injectable()
@@ -38,6 +40,8 @@ export class UserService {
     private readonly restoreUserTransaction: RestoreUserTransaction,
     @Inject(forwardRef(() => DeleteUserTransaction))
     private readonly deleteUserTransaction: DeleteUserTransaction,
+    @Inject(forwardRef(() => UpdateUserTransaction))
+    private readonly updateUserTransaction: UpdateUserTransaction,
   ) {}
 
   async create(payload: CreateUserDto, user: User): Promise<User> {
@@ -55,32 +59,62 @@ export class UserService {
     return newUser;
   }
 
-  updateByUser(payload: UpdateUserByUserDto, currentUser: User): Promise<User> {
-    return this.updateSameUser(payload, currentUser);
+  async updateWithEntityManager(
+    payload: Partial<User>,
+    findedUser: User,
+    manager: EntityManager,
+  ) {
+    if (payload.email !== findedUser.email) {
+      const existedUser = await manager
+        .createQueryBuilder(User, 'public.user')
+        .withDeleted()
+        .where('public.user.id != :id')
+        .andWhere('public.user.email = :email')
+        .setParameters({ id: payload.id, email: payload.email })
+        .getOne();
+
+      if (existedUser) {
+        throw new BadRequestException('A user exists with the email.');
+      }
+    }
+
+    const newUser = Object.assign(findedUser, payload, {
+      updatedAt: new Date(),
+    });
+    return manager
+      .createQueryBuilder(User, 'public.user')
+      .update()
+      .set(newUser)
+      .where('public.user.id = :id')
+      .setParameters({ id: payload.id })
+      .returning('*')
+      .exe({ noEffectError: 'Could not update the user.' });
   }
 
-  updateByOwner(
+  async updateByUser(
+    payload: UpdateUserByUserDto,
+    currentUser: User,
+  ): Promise<User> {
+    return this.updateUserTransaction.run({ payload, user: currentUser });
+  }
+
+  async updateByOwner(
     payload: UpdateUserByOwnerDto,
     currentUser: User,
   ): Promise<User> {
-    if (payload.id === currentUser.id)
-      return this.updateSameUser(payload, currentUser);
-    return this.findByIdAndUpdate(payload, currentUser);
-  }
+    if (payload.id === currentUser.id) {
+      return this.updateUserTransaction.run({
+        payload,
+        user: currentUser,
+      });
+    }
 
-  async updateSameUser(
-    payload: UpdatedUserPartialObj,
-    user: User,
-  ): Promise<User> {
-    return this.update(payload, user, user);
-  }
-
-  async findByIdAndUpdate(
-    payload: UpdatedUserPartialObj,
-    currentUser: User,
-  ): Promise<User> {
     const user = await this.findByIdOrFail(payload.id);
-    return this.update(payload, user, currentUser);
+    return this.updateUserTransaction.run({
+      payload,
+      user,
+      currentUser,
+    });
   }
 
   async updatePartialForMicroservices(
@@ -89,38 +123,12 @@ export class UserService {
   ): Promise<User> {
     try {
       const user = await this.findByIdOrFail(payload.id);
-      const updatedUser = await this.updateSameUser(payload, user);
-      return updatedUser;
+      return this.updateUserTransaction.run({ payload, user });
     } catch (error) {
       throw new RpcException(error);
     } finally {
       this.rabbitmqService.applyAcknowledgment(context);
     }
-  }
-
-  async update(
-    payload: UpdatedUserPartialObj,
-    user: User,
-    currentUser: User,
-  ): Promise<User> {
-    if (payload.email) {
-      let findedUser = await this.userRepository
-        .createQueryBuilder('user')
-        .withDeleted()
-        .where('user.id != :userId')
-        .andWhere('user.email = :userEmail')
-        .setParameters({ userId: payload.id, userEmail: payload.email })
-        .getOne();
-      if (findedUser) throw new ConflictException('The user already exist.');
-    }
-
-    user.updatedAt = new Date();
-    user = this.userRepository.create(Object.assign(user, payload));
-    user = await this.userRepository.save(user);
-    await this.clientProxy
-      .emit('updated_user', { currentUser, updatedUser: user })
-      .toPromise();
-    return user;
   }
 
   deleteWithEntityManager(

@@ -1,6 +1,6 @@
 import { BadRequestException, NotFoundException } from '@nestjs/common';
 import { ExeOptions } from 'src';
-import { SelectQueryBuilder, QueryBuilder } from 'typeorm';
+import { SelectQueryBuilder, QueryBuilder, UpdateQueryBuilder } from 'typeorm';
 import { SoftDeleteQueryBuilder } from 'typeorm/query-builder/SoftDeleteQueryBuilder';
 import { camelcaseKeys } from './camelcase';
 
@@ -44,3 +44,5 @@ SelectQueryBuilder.prototype.getOneOrFail = async function <Entity>(
 };
 
 SoftDeleteQueryBuilder.prototype.exe = exe;
+
+UpdateQueryBuilder.prototype.exe = exe;

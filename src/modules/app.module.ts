@@ -15,6 +15,7 @@ import { redisStore } from 'cache-manager-redis-yet';
 import {
   DeleteUserTransaction,
   RestoreUserTransaction,
+  UpdateUserTransaction,
 } from 'src/transactions';
 
 @Module({
@@ -76,6 +77,7 @@ import {
     RabbitmqService,
     RestoreUserTransaction,
     DeleteUserTransaction,
+    UpdateUserTransaction,
     { provide: APP_FILTER, useClass: AllExceptionFilter },
     {
       provide: APP_PIPE,
