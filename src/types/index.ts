@@ -1,4 +1,5 @@
 import { Request as Req } from 'express';
+import { CreateUserDto } from 'src/dtos';
 import { User } from 'src/entities';
 
 export interface CurrentUserObj {
@@ -85,4 +86,8 @@ export interface DeleteUserObj {
 export interface UpdateUserObj extends Partial<CurrentUserObj> {
   payload: Partial<User>;
   user: User;
+}
+
+export interface CreateUserObj extends CurrentUserObj {
+  payload: CreateUserDto;
 }

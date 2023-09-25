@@ -24,6 +24,7 @@ import { RabbitmqService } from './rabbitmq.service';
 import { UserListFiltersDto } from 'src/dtos/userListFilters.dto';
 import { DeletedUserListFiltersDto } from 'src/dtos/deletedUserListFilters.dto';
 import {
+  CreateUserTransaction,
   DeleteUserTransaction,
   RestoreUserTransaction,
   UpdateUserTransaction,
@@ -42,21 +43,33 @@ export class UserService {
     private readonly deleteUserTransaction: DeleteUserTransaction,
     @Inject(forwardRef(() => UpdateUserTransaction))
     private readonly updateUserTransaction: UpdateUserTransaction,
+    @Inject(forwardRef(() => CreateUserTransaction))
+    private readonly createUserTransaction: CreateUserTransaction,
   ) {}
 
-  async create(payload: CreateUserDto, user: User): Promise<User> {
-    let findedUser = await this.findByEmailWithDeleted(payload.email);
+  async createWithEntityManager(
+    payload: CreateUserDto,
+    currentUser: User,
+    manager: EntityManager,
+  ): Promise<User> {
+    let findedUser = await manager
+      .createQueryBuilder(User, 'public.user')
+      .withDeleted()
+      .where('public.user.email = :email', { email: payload.email })
+      .getOne();
 
     if (findedUser) throw new ConflictException('The user already exist.');
 
     payload.password = await hash(payload.password, 10);
-    let newUser = this.userRepository.create(payload);
-    newUser.parent = user;
-    newUser = await this.userRepository.save(newUser);
-    await this.clientProxy
-      .emit('created_user', { currentUser: user, createdUser: newUser })
-      .toPromise();
+    let newUser = manager.create(User);
+    newUser = Object.assign(newUser, payload);
+    newUser.parent = currentUser;
+    newUser = await manager.save(newUser);
     return newUser;
+  }
+
+  async create(payload: CreateUserDto, currentUser: User): Promise<User> {
+    return this.createUserTransaction.run({ payload, currentUser });
   }
 
   async updateWithEntityManager(
