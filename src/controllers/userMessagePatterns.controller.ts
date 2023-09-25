@@ -13,7 +13,7 @@ import { UpdatedUserPartialObj } from 'src/types';
 export class UserMessagePatternController {
   constructor(private readonly userService: UserService) {}
 
-  @MessagePattern('update_user_partial')
+  @MessagePattern('update_user')
   updatePartial(
     @Payload() payload: UpdatedUserPartialObj,
     @Ctx() context: RmqContext,
