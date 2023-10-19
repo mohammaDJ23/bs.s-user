@@ -1,6 +1,7 @@
 import { Request as Req } from 'express';
 import { CreateUserDto } from 'src/dtos';
 import { User } from 'src/entities';
+import { RequestOptions } from 'web-push';
 
 export interface CurrentUserObj {
   currentUser: User;
@@ -90,4 +91,9 @@ export interface UpdateUserObj extends Partial<CurrentUserObj> {
 
 export interface CreateUserObj extends CurrentUserObj {
   payload: CreateUserDto;
+}
+
+export interface NotificationObj {
+  payload?: string;
+  requestOptions?: RequestOptions;
 }
