@@ -37,7 +37,11 @@ export class CreateUserTransaction extends BaseTransaction<
       .toPromise();
     await this.notificationClientProxy
       .emit<string, NotificationObj>('notification_to_owners', {
-        payload: 'A new user was created.',
+        payload: JSON.stringify({
+          type: 'created_user',
+          title: 'A new user was created.',
+          createdUser,
+        }),
       })
       .toPromise();
     return createdUser;

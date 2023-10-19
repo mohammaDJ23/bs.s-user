@@ -94,6 +94,6 @@ export interface CreateUserObj extends CurrentUserObj {
 }
 
 export interface NotificationObj {
-  payload?: string;
+  payload?: string | Buffer | null;
   requestOptions?: RequestOptions;
 }
