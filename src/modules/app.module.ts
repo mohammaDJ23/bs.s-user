@@ -35,7 +35,7 @@ import {
     }),
     ClientsModule.register([
       {
-        name: process.env.USER_RABBITMQ_SERVICE,
+        name: process.env.BANK_RABBITMQ_SERVICE,
         transport: Transport.RMQ,
         options: {
           urls: [process.env.RABBITMQ_URL],
@@ -47,7 +47,7 @@ import {
         },
       },
       {
-        name: process.env.USER_RABBITMQ_SERVICE,
+        name: process.env.NOTIFICATION_RABBITMQ_SERVICE,
         transport: Transport.RMQ,
         options: {
           urls: [process.env.RABBITMQ_URL],
