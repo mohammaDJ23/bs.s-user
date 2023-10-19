@@ -15,8 +15,6 @@ export class RestoreUserTransaction extends BaseTransaction<
     dataSource: DataSource,
     @Inject(process.env.BANK_RABBITMQ_SERVICE)
     private readonly bankClientProxy: ClientProxy,
-    @Inject(process.env.NOTIFICATION_RABBITMQ_SERVICE)
-    private readonly notificationClientProxy: ClientProxy,
     @Inject(forwardRef(() => UserService))
     private readonly userService: UserService,
   ) {
@@ -33,9 +31,6 @@ export class RestoreUserTransaction extends BaseTransaction<
       manager,
     );
     await this.bankClientProxy
-      .send('restored_user', { currentUser: data.user, restoredUser })
-      .toPromise();
-    await this.notificationClientProxy
       .send('restored_user', { currentUser: data.user, restoredUser })
       .toPromise();
     return restoredUser;

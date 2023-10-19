@@ -15,8 +15,6 @@ export class DeleteUserTransaction extends BaseTransaction<
     dataSource: DataSource,
     @Inject(process.env.BANK_RABBITMQ_SERVICE)
     private readonly bankClientProxy: ClientProxy,
-    @Inject(process.env.NOTIFICATION_RABBITMQ_SERVICE)
-    private readonly notificationClientProxy: ClientProxy,
     @Inject(forwardRef(() => UserService))
     private readonly userService: UserService,
   ) {
@@ -33,9 +31,6 @@ export class DeleteUserTransaction extends BaseTransaction<
       manager,
     );
     await this.bankClientProxy
-      .send('deleted_user', { deletedUser, currentUser: data.user })
-      .toPromise();
-    await this.notificationClientProxy
       .send('deleted_user', { deletedUser, currentUser: data.user })
       .toPromise();
     return;
