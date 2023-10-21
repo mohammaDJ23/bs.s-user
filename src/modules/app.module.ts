@@ -35,11 +35,23 @@ import {
     }),
     ClientsModule.register([
       {
-        name: process.env.USER_RABBITMQ_SERVICE,
+        name: process.env.BANK_RABBITMQ_SERVICE,
         transport: Transport.RMQ,
         options: {
           urls: [process.env.RABBITMQ_URL],
           queue: process.env.BANK_RABBITMQ_QUEUE,
+          queueOptions: {
+            durable: true,
+          },
+          noAck: false,
+        },
+      },
+      {
+        name: process.env.NOTIFICATION_RABBITMQ_SERVICE,
+        transport: Transport.RMQ,
+        options: {
+          urls: [process.env.RABBITMQ_URL],
+          queue: process.env.NOTIFICATION_RABBITMQ_QUEUE,
           queueOptions: {
             durable: true,
           },

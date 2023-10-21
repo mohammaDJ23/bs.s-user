@@ -13,8 +13,8 @@ export class UpdateUserTransaction extends BaseTransaction<
 > {
   constructor(
     dataSource: DataSource,
-    @Inject(process.env.USER_RABBITMQ_SERVICE)
-    private readonly clientProxy: ClientProxy,
+    @Inject(process.env.BANK_RABBITMQ_SERVICE)
+    private readonly bankClientProxy: ClientProxy,
     @Inject(forwardRef(() => UserService))
     private readonly userService: UserService,
   ) {
@@ -31,7 +31,7 @@ export class UpdateUserTransaction extends BaseTransaction<
       data.user,
       manager,
     );
-    await this.clientProxy
+    await this.bankClientProxy
       .send('updated_user', { updatedUser, currentUser: data.currentUser })
       .toPromise();
     return updatedUser;

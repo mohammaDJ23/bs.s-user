@@ -13,8 +13,8 @@ export class DeleteUserTransaction extends BaseTransaction<
 > {
   constructor(
     dataSource: DataSource,
-    @Inject(process.env.USER_RABBITMQ_SERVICE)
-    private readonly clientProxy: ClientProxy,
+    @Inject(process.env.BANK_RABBITMQ_SERVICE)
+    private readonly bankClientProxy: ClientProxy,
     @Inject(forwardRef(() => UserService))
     private readonly userService: UserService,
   ) {
@@ -30,9 +30,9 @@ export class DeleteUserTransaction extends BaseTransaction<
       data.user.id,
       manager,
     );
-    await this.clientProxy
+    await this.bankClientProxy
       .send('deleted_user', { deletedUser, currentUser: data.user })
       .toPromise();
-    return deletedUser;
+    return;
   }
 }

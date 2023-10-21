@@ -1,6 +1,6 @@
 import { Inject, Injectable, forwardRef } from '@nestjs/common';
 import { UserService } from 'src/services';
-import { CreateUserObj } from 'src/types';
+import { CreateUserObj, NotificationObj } from 'src/types';
 import { DataSource, EntityManager } from 'typeorm';
 import { BaseTransaction } from './base.transaction';
 import { ClientProxy } from '@nestjs/microservices';
@@ -13,8 +13,10 @@ export class CreateUserTransaction extends BaseTransaction<
 > {
   constructor(
     dataSource: DataSource,
-    @Inject(process.env.USER_RABBITMQ_SERVICE)
-    private readonly clientProxy: ClientProxy,
+    @Inject(process.env.BANK_RABBITMQ_SERVICE)
+    private readonly bankClientProxy: ClientProxy,
+    @Inject(process.env.NOTIFICATION_RABBITMQ_SERVICE)
+    private readonly notificationClientProxy: ClientProxy,
     @Inject(forwardRef(() => UserService))
     private readonly userService: UserService,
   ) {
@@ -30,8 +32,17 @@ export class CreateUserTransaction extends BaseTransaction<
       data.currentUser,
       manager,
     );
-    await this.clientProxy
+    await this.bankClientProxy
       .send('created_user', { createdUser, currentUser: data.currentUser })
+      .toPromise();
+    await this.notificationClientProxy
+      .emit<string, NotificationObj>('notification_to_owners', {
+        payload: JSON.stringify({
+          type: 'created_user',
+          title: 'A new user was created.',
+          createdUser,
+        }),
+      })
       .toPromise();
     return createdUser;
   }
