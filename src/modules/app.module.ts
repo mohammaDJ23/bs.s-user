@@ -9,9 +9,15 @@ import { AllExceptionFilter } from '../filters';
 import { APP_FILTER, APP_PIPE } from '@nestjs/core';
 import { PassportModule } from '@nestjs/passport';
 import { JwtModule } from '@nestjs/jwt';
-import { GatewayController, MessagePatternController } from '../controllers';
+import { UserMessagePatternController, userController } from '../controllers';
 import { UserConnectionGateWay } from 'src/gateways';
 import { redisStore } from 'cache-manager-redis-yet';
+import {
+  CreateUserTransaction,
+  DeleteUserTransaction,
+  RestoreUserTransaction,
+  UpdateUserTransaction,
+} from 'src/transactions';
 
 @Module({
   imports: [
@@ -29,11 +35,23 @@ import { redisStore } from 'cache-manager-redis-yet';
     }),
     ClientsModule.register([
       {
-        name: process.env.USER_RABBITMQ_SERVICE,
+        name: process.env.BANK_RABBITMQ_SERVICE,
         transport: Transport.RMQ,
         options: {
           urls: [process.env.RABBITMQ_URL],
           queue: process.env.BANK_RABBITMQ_QUEUE,
+          queueOptions: {
+            durable: true,
+          },
+          noAck: false,
+        },
+      },
+      {
+        name: process.env.NOTIFICATION_RABBITMQ_SERVICE,
+        transport: Transport.RMQ,
+        options: {
+          urls: [process.env.RABBITMQ_URL],
+          queue: process.env.NOTIFICATION_RABBITMQ_QUEUE,
           queueOptions: {
             durable: true,
           },
@@ -65,11 +83,15 @@ import { redisStore } from 'cache-manager-redis-yet';
       signOptions: { expiresIn: process.env.JWT_EXPIRATION },
     }),
   ],
-  controllers: [GatewayController, MessagePatternController],
+  controllers: [userController, UserMessagePatternController],
   providers: [
     UserService,
     JwtStrategy,
     RabbitmqService,
+    RestoreUserTransaction,
+    DeleteUserTransaction,
+    UpdateUserTransaction,
+    CreateUserTransaction,
     { provide: APP_FILTER, useClass: AllExceptionFilter },
     {
       provide: APP_PIPE,

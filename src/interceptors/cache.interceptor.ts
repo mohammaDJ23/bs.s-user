@@ -7,7 +7,7 @@ import {
   NestInterceptor,
 } from '@nestjs/common';
 import { Cache } from 'cache-manager';
-import { map, of } from 'rxjs';
+import { mergeMap, of } from 'rxjs';
 import { getCacheKey, getRequest } from 'src/libs';
 
 @Injectable()
@@ -31,7 +31,7 @@ export class CacheInterceptor implements NestInterceptor {
       return of(cachedData[cacheKey][originalUrl]);
     } else {
       return handler.handle().pipe(
-        map(async (data: any) => {
+        mergeMap(async (data: any) => {
           if (request.route.isPrivate) {
             cachedData[cacheKey][originalUrl] = data;
             await this.cacheService.set(cacheKey, cachedData);

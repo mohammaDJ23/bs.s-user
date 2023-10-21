@@ -7,7 +7,7 @@ import {
   Injectable,
 } from '@nestjs/common';
 import { Cache } from 'cache-manager';
-import { Observable, map } from 'rxjs';
+import { Observable, mergeMap } from 'rxjs';
 import { getCacheKey } from 'src/libs';
 
 @Injectable()
@@ -19,7 +19,7 @@ export class ResetCacheInterceptor implements NestInterceptor {
     next: CallHandler<any>,
   ): Observable<any> | Promise<Observable<any>> {
     return next.handle().pipe(
-      map(async (data: any) => {
+      mergeMap(async (data: any) => {
         const cacheKey = getCacheKey(context);
         const cachedData = await this.cacheService.get(cacheKey);
 
