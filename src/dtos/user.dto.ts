@@ -1,5 +1,5 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { Expose, Exclude } from 'class-transformer';
+import { Expose, Exclude, Type } from 'class-transformer';
 
 export class UserDto {
   @Expose()
@@ -44,4 +44,9 @@ export class UserDto {
   @Expose()
   @ApiProperty()
   deletedAt: Date;
+
+  @Expose()
+  @ApiProperty()
+  @Type(() => UserDto)
+  parent: UserDto;
 }
