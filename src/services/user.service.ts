@@ -176,6 +176,7 @@ export class UserService {
   findByIdOrFail(id: number): Promise<User> {
     return this.userRepository
       .createQueryBuilder('user')
+      .leftJoinAndSelect('user.parent', 'parent')
       .where('user.id = :id')
       .setParameters({ id })
       .getOneOrFail();
