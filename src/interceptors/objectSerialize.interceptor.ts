@@ -10,7 +10,6 @@ export class ObjectSerializerInterceptor implements NestInterceptor {
   intercept(context: ExecutionContext, handler: CallHandler): Observable<any> {
     return handler.handle().pipe(
       map((data: any) => {
-        console.log(data);
         return this.plainToClass(data);
       }),
     );
