@@ -24,9 +24,7 @@ export class AuthAdapter extends IoAdapter {
 
   createIOServer(port: number, options?: any): Server {
     const server: Server = super.createIOServer(port, options);
-    const unAuthorizedError = new UnauthorizedException(
-      'No token is provided for socket.',
-    );
+    const unAuthorizedError = new UnauthorizedException('Unauthorized');
 
     server.use((socket: CustomSocket, next) => {
       const bearerToken = socket.handshake.headers.authorization;
