@@ -18,9 +18,11 @@ import {
   RestoreUserTransaction,
   UpdateUserTransaction,
 } from 'src/transactions';
+import { ScheduleModule } from '@nestjs/schedule';
 
 @Module({
   imports: [
+    ScheduleModule.forRoot(),
     CacheModule.registerAsync({
       useFactory: async () => ({
         isGlobal: true,
@@ -92,6 +94,7 @@ import {
     DeleteUserTransaction,
     UpdateUserTransaction,
     CreateUserTransaction,
+
     { provide: APP_FILTER, useClass: AllExceptionFilter },
     {
       provide: APP_PIPE,
