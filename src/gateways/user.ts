@@ -11,6 +11,11 @@ import { JwtSocketGuard } from 'src/guards';
 import { CustomSocket } from 'src/adapters';
 import { Cache } from 'cache-manager';
 import { CacheKeys } from 'src/types';
+import { Cron, CronExpression } from '@nestjs/schedule';
+
+type UsersStatusType = Record<number, CustomSocket['user']>;
+
+type CachedUsersStatusType = Record<string, UsersStatusType>;
 
 @WebSocketGateway({
   path: '/socket/user-connection',
@@ -29,46 +34,77 @@ export class UserConnectionGateWay
     return CacheKeys.USERS_STATUS;
   }
 
-  async handleConnection(client: CustomSocket) {
+  async getCachedData(): Promise<CachedUsersStatusType> {
     const cacheKey = this.getCacheKey();
-    let cachedData: Record<
-      string,
-      Record<number, CustomSocket['user']>
-    > = (await this.cacheService.get(cacheKey)) || {};
+    return (await this.cacheService.get<CachedUsersStatusType>(cacheKey)) || {};
+  }
 
+  async cacheData(data: CachedUsersStatusType): Promise<void> {
+    const cacheKey = this.getCacheKey();
+    await this.cacheService.set(cacheKey, data);
+  }
+
+  async getCachedUsersStatus(): Promise<UsersStatusType> {
+    const cacheKey = this.getCacheKey();
+    const cachedData = await this.getCachedData();
     if (!cachedData[cacheKey]) {
       cachedData[cacheKey] = {};
     }
+    return cachedData[cacheKey];
+  }
 
-    cachedData[cacheKey][client.user.id] = Object.assign(client.user, {
+  async cacheUsersStatus(data: UsersStatusType): Promise<void> {
+    const cacheKey = this.getCacheKey();
+    const newData = { [cacheKey]: data };
+    await this.cacheData(newData);
+  }
+
+  async handleConnection(client: CustomSocket) {
+    const usersStatus = await this.getCachedUsersStatus();
+
+    usersStatus[client.user.id] = Object.assign(client.user, {
       lastConnection: null,
     });
-    await this.cacheService.set(cacheKey, cachedData);
+    await this.cacheUsersStatus(usersStatus);
 
-    this.wss.emit('users_status', cachedData[cacheKey]);
+    this.emitUsersStatuEvent(usersStatus);
   }
 
   async handleDisconnect(client: CustomSocket) {
-    const cacheKey = this.getCacheKey();
-    let cachedData: Record<
-      string,
-      Record<number, CustomSocket['user']>
-    > = await this.cacheService.get(cacheKey);
+    const usersStatus = await this.getCachedUsersStatus();
 
-    if (cachedData[cacheKey][client.user.id]) {
-      cachedData[cacheKey][client.user.id] = Object.assign(client.user, {
-        lastConnection: new Date().toISOString(),
-      });
-      await this.cacheService.set(cacheKey, cachedData);
-    }
+    usersStatus[client.user.id] = Object.assign(client.user, {
+      lastConnection: new Date().toISOString(),
+    });
+    await this.cacheUsersStatus(usersStatus);
 
-    this.wss.emit('users_status', cachedData[cacheKey]);
+    this.emitUsersStatuEvent(usersStatus);
   }
 
   @SubscribeMessage('users_status')
-  async usersStatus() {
-    const cacheKey = this.getCacheKey();
-    const cachedData = await this.cacheService.get(cacheKey);
-    return { event: 'users_status', data: cachedData[cacheKey] };
+  async usersStatusSubscription() {
+    const usersStatus = await this.getCachedUsersStatus();
+    return { event: 'users_status', data: usersStatus };
+  }
+
+  emitUsersStatuEvent(data: UsersStatusType) {
+    this.wss.emit('users_status', data);
+  }
+
+  @Cron(CronExpression.EVERY_WEEK)
+  async removeUsersStatus(): Promise<void> {
+    const oneWeekMilisecond = 604800000;
+    const usersStatus = await this.getCachedUsersStatus();
+    for (const userStatus in usersStatus) {
+      if (
+        usersStatus[userStatus].lastConnection &&
+        new Date(usersStatus[userStatus].lastConnection).getTime() <=
+          new Date().getTime() - oneWeekMilisecond
+      ) {
+        delete usersStatus[userStatus];
+      }
+    }
+    await this.cacheUsersStatus(usersStatus);
+    this.emitUsersStatuEvent(usersStatus);
   }
 }
