@@ -9,6 +9,7 @@ export interface CustomSocket extends Socket {
     expiration: number;
     iat: number;
     exp: number;
+    lastConnection: Date | null;
   };
 }
 

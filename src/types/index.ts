@@ -63,6 +63,7 @@ export enum CacheKeys {
   DELETED_USER = 'DELETED_USER',
   QUANTITIES = 'QUANTITIES',
   DELETED_QUANTITIES = 'DELETED_QUANTITIES',
+  USERS_STATUS = 'USERS_STATUS',
 }
 
 export interface CacheKeyOptions {
