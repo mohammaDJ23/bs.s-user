@@ -18,7 +18,7 @@ type UsersStatusType = Record<number, CustomSocket['user']>;
 type CachedUsersStatusType = Record<string, UsersStatusType>;
 
 @WebSocketGateway({
-  path: '/socket/user-connection',
+  path: '/api/v1/user/socket/connection',
   cors: { origin: process.env.CLIENT_CONTAINER_URL },
 })
 @UseGuards(JwtSocketGuard)
