@@ -10,7 +10,7 @@ import { Server } from 'socket.io';
 import { JwtSocketGuard } from 'src/guards';
 import { CustomSocket } from 'src/adapters';
 import { Cache } from 'cache-manager';
-import { CacheKeys } from 'src/types';
+import { CacheKeys, UserRoles } from 'src/types';
 import { Cron, CronExpression } from '@nestjs/schedule';
 
 type UsersStatusType = Record<number, CustomSocket['user']>;
@@ -19,7 +19,13 @@ type CachedUsersStatusType = Record<string, UsersStatusType>;
 
 @WebSocketGateway({
   path: '/api/v1/user/socket/connection',
-  cors: { origin: process.env.CLIENT_CONTAINER_URL },
+  cors: {
+    origin: [
+      process.env.CLIENT_CONTAINER_URL,
+      process.env.CLIENT_AUTH_URL,
+      process.env.CLIENT_BANK_URL,
+    ],
+  },
 })
 @UseGuards(JwtSocketGuard)
 export class UserConnectionGateWay
@@ -81,19 +87,33 @@ export class UserConnectionGateWay
     this.emitUsersStatuEvent(usersStatus);
   }
 
-  @SubscribeMessage('users_status')
-  async usersStatusSubscription() {
-    const usersStatus = await this.getCachedUsersStatus();
-    return { event: 'users_status', data: usersStatus };
-  }
-
   emitUsersStatuEvent(data: UsersStatusType) {
     this.wss.emit('users_status', data);
   }
 
+  @SubscribeMessage('users_status')
+  async usersStatusSubscription(client: CustomSocket) {
+    if (client.user.role === UserRoles.OWNER) {
+      const usersStatus = await this.getCachedUsersStatus();
+      this.wss.to(client.id).emit('users_status', usersStatus);
+    }
+  }
+
+  @SubscribeMessage('logout_user')
+  async logoutUserSubscription(
+    client: CustomSocket,
+    data: Record<'id', number>,
+  ) {
+    if (client.user.role === UserRoles.OWNER) {
+      const usersStatus = await this.getCachedUsersStatus();
+      if (usersStatus[data.id]) {
+        this.wss.emit('logout_user', usersStatus[data.id]);
+      }
+    }
+  }
+
   @Cron(CronExpression.EVERY_WEEK)
   async removeUsersStatus(): Promise<void> {
-    console.log('removing the user status', new Date());
     const oneWeekMilisecond = 604800000;
     const usersStatus = await this.getCachedUsersStatus();
     for (const userStatus in usersStatus) {
