@@ -93,6 +93,7 @@ export class UserConnectionGateWay
 
   @Cron(CronExpression.EVERY_WEEK)
   async removeUsersStatus(): Promise<void> {
+    console.log('removing the user status', new Date());
     const oneWeekMilisecond = 604800000;
     const usersStatus = await this.getCachedUsersStatus();
     for (const userStatus in usersStatus) {
