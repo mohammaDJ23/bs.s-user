@@ -42,7 +42,10 @@ export class UserConnectionGateWay
 
   async getCachedData(): Promise<CachedUsersStatusType> {
     const cacheKey = this.getCacheKey();
-    return (await this.cacheService.get<CachedUsersStatusType>(cacheKey)) || {};
+    const cachedData =
+      (await this.cacheService.get<CachedUsersStatusType>(cacheKey)) || {};
+    console.log(cachedData);
+    return cachedData;
   }
 
   async cacheData(data: CachedUsersStatusType): Promise<void> {
@@ -67,25 +70,19 @@ export class UserConnectionGateWay
 
   async handleConnection(client: CustomSocket) {
     const usersStatus = await this.getCachedUsersStatus();
-
     usersStatus[client.user.id] = Object.assign(client.user, {
       lastConnection: null,
     });
     await this.cacheUsersStatus(usersStatus);
-
-    console.log(usersStatus);
-
     this.emitUsersStatuEvent(usersStatus);
   }
 
   async handleDisconnect(client: CustomSocket) {
     const usersStatus = await this.getCachedUsersStatus();
-
     usersStatus[client.user.id] = Object.assign(client.user, {
       lastConnection: new Date().toISOString(),
     });
     await this.cacheUsersStatus(usersStatus);
-
     this.emitUsersStatuEvent(usersStatus);
   }
 
@@ -114,15 +111,20 @@ export class UserConnectionGateWay
     }
   }
 
-  @Cron(CronExpression.EVERY_WEEK)
+  @Cron(CronExpression.EVERY_6_MONTHS)
   async removeUsersStatus(): Promise<void> {
-    const oneWeekMilisecond = 604800000;
     const usersStatus = await this.getCachedUsersStatus();
+    console.log(
+      'running the cron and the result is: ',
+      usersStatus,
+      ' at ',
+      new Date(),
+    );
     for (const userStatus in usersStatus) {
       if (
         usersStatus[userStatus].lastConnection &&
         new Date(usersStatus[userStatus].lastConnection).getTime() <=
-          new Date().getTime() - oneWeekMilisecond
+          new Date().getTime() - 15778476000
       ) {
         delete usersStatus[userStatus];
       }
