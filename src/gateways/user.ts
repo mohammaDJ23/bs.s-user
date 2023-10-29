@@ -73,6 +73,8 @@ export class UserConnectionGateWay
     });
     await this.cacheUsersStatus(usersStatus);
 
+    console.log(usersStatus);
+
     this.emitUsersStatuEvent(usersStatus);
   }
 
