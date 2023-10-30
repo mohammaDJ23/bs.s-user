@@ -37,14 +37,13 @@ export class UserConnectionGateWay
   constructor(@Inject(CACHE_MANAGER) private readonly cacheService: Cache) {}
 
   getCacheKey() {
-    return CacheKeys.USERS_STATUS;
+    return `${CacheKeys.USERS_STATUS}.${process.env.PORT}`;
   }
 
   async getCachedData(): Promise<CachedUsersStatusType> {
     const cacheKey = this.getCacheKey();
     const cachedData =
       (await this.cacheService.get<CachedUsersStatusType>(cacheKey)) || {};
-    console.log(cachedData);
     return cachedData;
   }
 
@@ -111,20 +110,14 @@ export class UserConnectionGateWay
     }
   }
 
-  @Cron(CronExpression.EVERY_6_MONTHS)
+  @Cron(CronExpression.EVERY_WEEK)
   async removeUsersStatus(): Promise<void> {
     const usersStatus = await this.getCachedUsersStatus();
-    console.log(
-      'running the cron and the result is: ',
-      usersStatus,
-      ' at ',
-      new Date(),
-    );
     for (const userStatus in usersStatus) {
       if (
         usersStatus[userStatus].lastConnection &&
         new Date(usersStatus[userStatus].lastConnection).getTime() <=
-          new Date().getTime() - 15778476000
+          new Date().getTime() - 604800000
       ) {
         delete usersStatus[userStatus];
       }
