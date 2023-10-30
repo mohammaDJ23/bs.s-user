@@ -42,6 +42,10 @@ export class UserConnectionGateWay
 
   async getCachedData(): Promise<CachedUsersStatusType> {
     const cacheKey = this.getCacheKey();
+
+    console.log(await this.cacheService.store.keys());
+    console.log(await this.cacheService.store.get(cacheKey));
+
     const cachedData =
       (await this.cacheService.get<CachedUsersStatusType>(cacheKey)) || {};
     return cachedData;
