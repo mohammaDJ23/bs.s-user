@@ -29,6 +29,7 @@ import { ScheduleModule } from '@nestjs/schedule';
         store: await redisStore({
           ttl: +process.env.REDIS_TTL,
           url: `redis://${process.env.REDIS_HOST}:${process.env.REDIS_PORT}`,
+          password: process.env.REDIS_PASSWORD,
         }),
         host: process.env.REDIS_HOST,
         port: process.env.REDIS_PORT,
