@@ -209,6 +209,7 @@ export class UserService {
   findByEmail(email: string): Promise<User> {
     return this.userRepository
       .createQueryBuilder('user')
+      .leftJoinAndSelect('user.parent', 'parent')
       .where('user.email = :email')
       .setParameters({ email })
       .getOne();
@@ -217,6 +218,7 @@ export class UserService {
   findByEmailOrFail(email: string): Promise<User> {
     return this.userRepository
       .createQueryBuilder('user')
+      .leftJoinAndSelect('user.parent', 'parent')
       .where('user.email = :email')
       .setParameters({ email })
       .getOneOrFail();
