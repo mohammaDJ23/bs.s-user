@@ -1,7 +1,6 @@
 import {
   Injectable,
   ConflictException,
-  NotFoundException,
   Inject,
   forwardRef,
   BadRequestException,
@@ -14,19 +13,26 @@ import {
   UserQuantitiesDto,
   LastWeekDto,
   UpdateUserByOwnerDto,
-  DeletedUserDto,
+  UpdateUserDto,
 } from '../dtos';
 import { User } from '../entities';
 import { hash } from 'bcryptjs';
 import { RmqContext, RpcException } from '@nestjs/microservices';
-import { UserRoles, UpdatedUserPartialObj } from '../types';
+import {
+  UserRoles,
+  PartialUser,
+  FindUserByIdObj,
+  FindUserByEmailObj,
+} from '../types';
 import { RabbitmqService } from './rabbitmq.service';
 import { UserListFiltersDto } from 'src/dtos/userListFilters.dto';
 import { DeletedUserListFiltersDto } from 'src/dtos/deletedUserListFilters.dto';
 import {
   CreateUserTransaction,
+  DeleteUserByOwnerTransaction,
   DeleteUserTransaction,
   RestoreUserTransaction,
+  UpdateUserByOwnerTransaction,
   UpdateUserTransaction,
 } from 'src/transactions';
 
@@ -39,16 +45,20 @@ export class UserService {
     private readonly restoreUserTransaction: RestoreUserTransaction,
     @Inject(forwardRef(() => DeleteUserTransaction))
     private readonly deleteUserTransaction: DeleteUserTransaction,
+    @Inject(forwardRef(() => DeleteUserByOwnerTransaction))
+    private readonly deleteUserByOwnerTransaction: DeleteUserByOwnerTransaction,
     @Inject(forwardRef(() => UpdateUserTransaction))
     private readonly updateUserTransaction: UpdateUserTransaction,
+    @Inject(forwardRef(() => UpdateUserByOwnerTransaction))
+    private readonly updateUserByOwnerTransaction: UpdateUserByOwnerTransaction,
     @Inject(forwardRef(() => CreateUserTransaction))
     private readonly createUserTransaction: CreateUserTransaction,
   ) {}
 
   async createWithEntityManager(
-    payload: CreateUserDto,
-    currentUser: User,
     manager: EntityManager,
+    payload: CreateUserDto,
+    user: User,
   ): Promise<User> {
     let findedUser = await manager
       .createQueryBuilder(User, 'public.user')
@@ -61,27 +71,27 @@ export class UserService {
     payload.password = await hash(payload.password, 10);
     let newUser = manager.create(User);
     newUser = Object.assign(newUser, payload);
-    newUser.parent = currentUser;
+    newUser.parent = user;
     newUser = await manager.save(newUser);
     return newUser;
   }
 
-  async create(payload: CreateUserDto, currentUser: User): Promise<User> {
-    return this.createUserTransaction.run({ payload, currentUser });
+  async create(payload: CreateUserDto, user: User): Promise<User> {
+    return this.createUserTransaction.run(payload, user);
   }
 
   async updateWithEntityManager(
-    payload: Partial<User>,
-    findedUser: User,
     manager: EntityManager,
+    payload: UpdateUserDto,
+    user: User,
   ) {
-    if (payload.email !== findedUser.email) {
+    if (payload.email !== user.email) {
       const existedUser = await manager
         .createQueryBuilder(User, 'public.user')
         .withDeleted()
         .where('public.user.id != :id')
         .andWhere('public.user.email = :email')
-        .setParameters({ id: payload.id, email: payload.email })
+        .setParameters({ id: user.id, email: payload.email })
         .getOne();
 
       if (existedUser) {
@@ -89,6 +99,41 @@ export class UserService {
       }
     }
 
+    const newUser = Object.assign(user, payload, { updatedAt: new Date() });
+    return manager
+      .createQueryBuilder(User, 'public.user')
+      .update()
+      .set(newUser)
+      .where('public.user.id = :id')
+      .andWhere('public.user.created_by = :parentId')
+      .setParameters({ id: user.id, parentId: user.parent.id })
+      .returning('*')
+      .exe({ noEffectError: 'Could not update the user.' });
+  }
+
+  async updateByUser(payload: UpdateUserByUserDto, user: User): Promise<User> {
+    return this.updateUserTransaction.run(payload, user);
+  }
+
+  async updateByOwnerWithEntityManager(
+    manager: EntityManager,
+    id: number,
+    parentId: number,
+    payload: UpdateUserByOwnerDto,
+  ) {
+    const existedUser = await manager
+      .createQueryBuilder(User, 'public.user')
+      .withDeleted()
+      .where('public.user.id != :id')
+      .andWhere('public.user.email = :email')
+      .setParameters({ id, email: payload.email })
+      .getOne();
+
+    if (existedUser) {
+      throw new BadRequestException('A user exists with the email.');
+    }
+
+    const findedUser = await this.findByIdOrFail(id);
     const newUser = Object.assign(findedUser, payload, {
       updatedAt: new Date(),
     });
@@ -97,47 +142,28 @@ export class UserService {
       .update()
       .set(newUser)
       .where('public.user.id = :id')
-      .setParameters({ id: payload.id })
+      .andWhere('public.user.created_by = :parentId')
+      .setParameters({ id, parentId })
       .returning('*')
       .exe({ noEffectError: 'Could not update the user.' });
   }
 
-  async updateByUser(
-    payload: UpdateUserByUserDto,
-    currentUser: User,
-  ): Promise<User> {
-    return this.updateUserTransaction.run({ payload, user: currentUser });
-  }
-
   async updateByOwner(
+    id: number,
+    parentId: number,
     payload: UpdateUserByOwnerDto,
-    currentUser: User,
+    user: User,
   ): Promise<User> {
-    if (payload.id === currentUser.id) {
-      return this.updateUserTransaction.run({
-        payload,
-        user: currentUser,
-      });
-    }
-
-    const user = await this.findByIdOrFail(payload.id);
-    return this.updateUserTransaction.run({
-      payload,
-      user,
-      currentUser,
-    });
+    return this.updateUserByOwnerTransaction.run(id, parentId, payload, user);
   }
 
   async updateByMicroservice(
-    payload: UpdatedUserPartialObj,
     context: RmqContext,
+    payload: PartialUser,
   ): Promise<User> {
     try {
       const user = await this.findByIdOrFail(payload.id);
-      const updatedUser = await this.updateUserTransaction.run({
-        payload,
-        user,
-      });
+      const updatedUser = await this.updateUserTransaction.run(payload, user);
       this.rabbitmqService.applyAcknowledgment(context);
       return updatedUser;
     } catch (error) {
@@ -145,23 +171,40 @@ export class UserService {
     }
   }
 
-  deleteWithEntityManager(
-    deleteUserId: number,
-    currentUserId: number,
-    entityManager: EntityManager,
-  ): Promise<User> {
-    return entityManager
+  deleteWithEntityManager(manager: EntityManager, user: User): Promise<User> {
+    return manager
       .createQueryBuilder(User, 'public.user')
       .softDelete()
-      .where('public.user.id = :deleteUserId')
+      .where('public.user.id = :id')
       .andWhere('public.user.deleted_at IS NULL')
-      .setParameters({ deleteUserId })
+      .andWhere('public.user.created_by = :parentId')
+      .setParameters({ id: user.id, parentId: user.parent.id })
       .returning('*')
       .exe({ noEffectError: 'Could not delete the user.' });
   }
 
-  async delete(id: number, user: User): Promise<User> {
-    return this.deleteUserTransaction.run({ id, user });
+  async deleteByUser(user: User): Promise<User> {
+    return this.deleteUserTransaction.run(user);
+  }
+
+  deleteByOwnerWithEntityManager(
+    entityManager: EntityManager,
+    id: number,
+    parentId: number,
+  ): Promise<User> {
+    return entityManager
+      .createQueryBuilder(User, 'public.user')
+      .softDelete()
+      .where('public.user.id = :id')
+      .andWhere('public.user.deleted_at IS NULL')
+      .andWhere('public.user.created_by = :parentId')
+      .setParameters({ id, parentId })
+      .returning('*')
+      .exe({ noEffectError: 'Could not delete the user.' });
+  }
+
+  async deleteByOwner(id: number, parentId: number, user: User): Promise<User> {
+    return this.deleteUserByOwnerTransaction.run(id, parentId, user);
   }
 
   findById(id: number): Promise<User> {
@@ -183,11 +226,11 @@ export class UserService {
   }
 
   async findByIdOrFailByMicroservice(
-    id: number,
     context: RmqContext,
+    payload: FindUserByIdObj['payload'],
   ): Promise<User> {
     try {
-      return this.findByIdOrFail(id);
+      return this.findByIdOrFail(payload.id);
     } catch (error) {
       throw new RpcException(error);
     } finally {
@@ -195,9 +238,12 @@ export class UserService {
     }
   }
 
-  async findByIdByMicroservice(id: number, context: RmqContext): Promise<User> {
+  async findByIdByMicroservice(
+    context: RmqContext,
+    payload: FindUserByIdObj['payload'],
+  ): Promise<User> {
     try {
-      return this.findById(id);
+      return this.findById(payload.id);
     } catch (error) {
       throw new RpcException(error);
     } finally {
@@ -233,11 +279,11 @@ export class UserService {
   }
 
   async findByEmailOrFailByMicroservice(
-    email: string,
     context: RmqContext,
+    payload: FindUserByEmailObj['payload'],
   ): Promise<User> {
     try {
-      return this.findByEmailOrFail(email);
+      return this.findByEmailOrFail(payload.email);
     } catch (error) {
       throw new RpcException(error);
     } finally {
@@ -246,11 +292,11 @@ export class UserService {
   }
 
   async findByEmailByMicroservice(
-    email: string,
     context: RmqContext,
+    payload: FindUserByEmailObj['payload'],
   ): Promise<User> {
     try {
-      return this.findByEmail(email);
+      return this.findByEmail(payload.email);
     } catch (error) {
       throw new RpcException(error);
     } finally {
@@ -415,60 +461,34 @@ export class UserService {
       .getManyAndCount();
   }
 
-  async findByIdDeleted(id: number): Promise<DeletedUserDto> {
-    const [response]: DeletedUserDto[] = await this.userRepository.query(
-      `
-        SELECT
-          user1.id AS id,
-          user1.first_name AS "firstName",
-          user1.last_name AS "lastName",
-          user1.email AS email,
-          user1.phone AS phone,
-          user1.role AS role,
-          user1.created_by AS "createdBy",
-          user1.created_at AS "createdAt",
-          user1.updated_at AS "updatedAt",
-          user1.deleted_at AS "deletedAt",
-          json_build_object(
-            'id', user2.id,
-            'firstName', user2.first_name,
-            'lastName', user2.last_name,
-            'email', user2.email,
-            'phone', user2.phone,
-            'role', user2.role,
-            'createdBy', user2.created_by,
-            'createdAt', user2.created_at,
-            'updatedAt', user2.updated_at,
-            'deletedAt', user2.deleted_at
-          ) AS parent
-        FROM public.user AS user1
-        LEFT JOIN public.user AS user2 ON user2.id = user1.created_by
-        WHERE user1.id = $1 AND user1.deleted_at IS NOT NULL;
-      `,
-      [id],
-    );
-
-    if (!response) throw new NotFoundException('Could not found the user.');
-    return response;
+  async findByIdDeleted(id: number): Promise<User> {
+    return this.userRepository
+      .createQueryBuilder('user')
+      .withDeleted()
+      .leftJoinAndSelect('user.parent', 'parent')
+      .where('user.id = :id')
+      .andWhere('user.deletedAt IS NOT NULL')
+      .setParameters({ id })
+      .getOne();
   }
 
   restoreOneWithEntityManager(
-    restoreUserId: number,
-    currentUserId: number,
-    entityManager: EntityManager,
+    manager: EntityManager,
+    id: number,
+    parentId: number,
   ): Promise<User> {
-    return entityManager
+    return manager
       .createQueryBuilder(User, 'public.user')
       .restore()
-      .where('public.user.id = :restoreUserId')
+      .where('public.user.id = :id')
       .andWhere('public.user.deleted_at IS NOT NULL')
-      .andWhere('public.user.created_by = :currentUserId')
-      .setParameters({ restoreUserId, currentUserId })
+      .andWhere('public.user.created_by = :parentId')
+      .setParameters({ id, parentId })
       .returning('*')
       .exe({ noEffectError: 'Could not restore the user.' });
   }
 
-  async restore(id: number, user: User): Promise<User> {
-    return this.restoreUserTransaction.run({ id, user });
+  async restore(id: number, parentId: number, user: User): Promise<User> {
+    return this.restoreUserTransaction.run(id, parentId, user);
   }
 }

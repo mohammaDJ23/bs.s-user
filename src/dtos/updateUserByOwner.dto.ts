@@ -3,10 +3,6 @@ import { IsString, Matches, Length, IsNumber, IsEnum } from 'class-validator';
 import { UserRoles } from 'src/types';
 
 export class UpdateUserByOwnerDto {
-  @IsNumber()
-  @ApiProperty()
-  id: number;
-
   @IsString()
   @Length(3, 45)
   @ApiProperty()

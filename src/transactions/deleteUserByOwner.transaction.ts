@@ -6,7 +6,7 @@ import { ClientProxy } from '@nestjs/microservices';
 import { User } from 'src/entities';
 
 @Injectable()
-export class DeleteUserTransaction extends BaseTransaction {
+export class DeleteUserByOwnerTransaction extends BaseTransaction {
   constructor(
     dataSource: DataSource,
     @Inject(process.env.BANK_RABBITMQ_SERVICE)
@@ -17,10 +17,16 @@ export class DeleteUserTransaction extends BaseTransaction {
     super(dataSource);
   }
 
-  protected async execute(manager: EntityManager, user: User): Promise<User> {
-    const deletedUser = await this.userService.deleteWithEntityManager(
+  protected async execute(
+    manager: EntityManager,
+    id: number,
+    parentId: number,
+    user: User,
+  ): Promise<User> {
+    const deletedUser = await this.userService.deleteByOwnerWithEntityManager(
       manager,
-      user,
+      id,
+      parentId,
     );
     await this.bankClientProxy
       .send('deleted_user', { payload: deletedUser, user })
