@@ -1,15 +1,17 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { IsString, Matches, Length, IsNumber, IsEnum } from 'class-validator';
+import { IsString, Matches, Length, IsEnum, MaxLength } from 'class-validator';
 import { UserRoles } from 'src/types';
 
 export class UpdateUserByOwnerDto {
   @IsString()
   @Length(3, 45)
+  @Matches(/^[a-zA-Z_]+( [a-zA-Z_]+)*$/, { message: 'Invalid firstname' })
   @ApiProperty()
   firstName: string;
 
   @IsString()
   @Length(3, 45)
+  @Matches(/^[a-zA-Z_]+( [a-zA-Z_]+)*$/, { message: 'Invalid lastname' })
   @ApiProperty()
   lastName: string;
 
@@ -19,6 +21,7 @@ export class UpdateUserByOwnerDto {
       message: 'Invalid email',
     },
   )
+  @MaxLength(256)
   @ApiProperty()
   email: string;
 

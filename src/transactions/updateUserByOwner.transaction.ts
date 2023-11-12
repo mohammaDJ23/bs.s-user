@@ -4,7 +4,7 @@ import { DataSource, EntityManager } from 'typeorm';
 import { BaseTransaction } from './base.transaction';
 import { ClientProxy } from '@nestjs/microservices';
 import { User } from 'src/entities';
-import { UpdateUserDto } from 'src/dtos';
+import { UpdateUserByOwnerDto, UpdateUserDto } from 'src/dtos';
 
 @Injectable()
 export class UpdateUserByOwnerTransaction extends BaseTransaction {
@@ -22,7 +22,7 @@ export class UpdateUserByOwnerTransaction extends BaseTransaction {
     manager: EntityManager,
     id: number,
     parentId: number,
-    payload: UpdateUserDto,
+    payload: UpdateUserByOwnerDto,
     user: User,
   ): Promise<User> {
     const updatedUser = await this.userService.updateByOwnerWithEntityManager(

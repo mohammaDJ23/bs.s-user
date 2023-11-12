@@ -1,16 +1,17 @@
-import { IsString, Matches, Length, IsNumber, IsEnum } from 'class-validator';
-import { UserRoles } from 'src/types';
+import { ApiProperty } from '@nestjs/swagger';
+import { IsString, Matches, Length, MaxLength } from 'class-validator';
 
 export class UpdateUserDto {
-  @IsNumber()
-  id: number;
-
   @IsString()
   @Length(3, 45)
+  @Matches(/^[a-zA-Z_]+( [a-zA-Z_]+)*$/, { message: 'Invalid firstname' })
+  @ApiProperty()
   firstName: string;
 
   @IsString()
   @Length(3, 45)
+  @Matches(/^[a-zA-Z_]+( [a-zA-Z_]+)*$/, { message: 'Invalid lastname' })
+  @ApiProperty()
   lastName: string;
 
   @Matches(
@@ -19,19 +20,20 @@ export class UpdateUserDto {
       message: 'Invalid email',
     },
   )
+  @MaxLength(256)
+  @ApiProperty()
   email: string;
 
   @Matches(/^(?=.*?[A-Z])(?=.*?[a-z])(?=.*?[0-9])(?=.*?[#?!@$%^&*-]).{6,45}$/, {
     message: 'The password should be strong',
   })
+  @ApiProperty()
   @Length(6, 45)
   password: string;
 
   @Matches(/^[\+]?[(]?[0-9]{3}[)]?[-\s\.]?[0-9]{3}[-\s\.]?[0-9]{4,6}$/im, {
     message: 'Invalid phone number',
   })
+  @ApiProperty()
   phone: string;
-
-  @IsEnum(UserRoles)
-  role: string;
 }
