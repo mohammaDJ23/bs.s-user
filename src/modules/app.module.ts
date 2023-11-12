@@ -14,8 +14,10 @@ import { UserConnectionGateWay } from 'src/gateways';
 import { redisStore } from 'cache-manager-redis-yet';
 import {
   CreateUserTransaction,
+  DeleteUserByOwnerTransaction,
   DeleteUserTransaction,
   RestoreUserTransaction,
+  UpdateUserByOwnerTransaction,
   UpdateUserTransaction,
 } from 'src/transactions';
 import { ScheduleModule } from '@nestjs/schedule';
@@ -94,9 +96,10 @@ import { ScheduleModule } from '@nestjs/schedule';
     RabbitmqService,
     RestoreUserTransaction,
     DeleteUserTransaction,
+    DeleteUserByOwnerTransaction,
     UpdateUserTransaction,
+    UpdateUserByOwnerTransaction,
     CreateUserTransaction,
-
     { provide: APP_FILTER, useClass: AllExceptionFilter },
     {
       provide: APP_PIPE,

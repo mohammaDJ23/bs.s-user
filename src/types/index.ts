@@ -1,10 +1,13 @@
 import { Request as Req } from 'express';
-import { CreateUserDto } from 'src/dtos';
 import { User } from 'src/entities';
 import { RequestOptions } from 'web-push';
 
 export interface CurrentUserObj {
   currentUser: User;
+}
+
+export interface UserObj {
+  user: User;
 }
 
 export interface EncryptedUserObj {
@@ -22,8 +25,20 @@ export enum UserRoles {
   USER = 'user',
 }
 
-export interface UpdatedUserPartialObj extends Partial<User> {
+export interface PartialUser extends Partial<User> {
   id: number;
+}
+
+export interface UpdatedUserPartialObj {
+  payload: PartialUser;
+}
+
+export interface FindUserByEmailObj {
+  payload: Pick<PartialUser, 'email'>;
+}
+
+export interface FindUserByIdObj {
+  payload: Pick<PartialUser, 'id'>;
 }
 
 export interface Request extends Req, CurrentUserObj {}
@@ -75,26 +90,9 @@ export interface CacheKeyMetadata {
   options: CacheKeyOptions;
 }
 
-export interface RestoreUserObj {
-  id: number;
-  user: User;
-}
-
-export interface DeleteUserObj {
-  id: number;
-  user: User;
-}
-
-export interface UpdateUserObj extends Partial<CurrentUserObj> {
-  payload: Partial<User>;
-  user: User;
-}
-
-export interface CreateUserObj extends CurrentUserObj {
-  payload: CreateUserDto;
-}
-
-export interface NotificationObj {
-  payload?: string | Buffer | null;
-  requestOptions?: RequestOptions;
+export interface NotificationObj extends UserObj {
+  payload: {
+    data?: string | Buffer | null;
+    options?: RequestOptions;
+  };
 }

@@ -2,15 +2,11 @@ import { Inject, Injectable, forwardRef } from '@nestjs/common';
 import { ClientProxy } from '@nestjs/microservices';
 import { User } from 'src/entities';
 import { UserService } from 'src/services';
-import { RestoreUserObj } from 'src/types';
 import { DataSource, EntityManager } from 'typeorm';
 import { BaseTransaction } from './base.transaction';
 
 @Injectable()
-export class RestoreUserTransaction extends BaseTransaction<
-  RestoreUserObj,
-  User
-> {
+export class RestoreUserTransaction extends BaseTransaction {
   constructor(
     dataSource: DataSource,
     @Inject(process.env.BANK_RABBITMQ_SERVICE)
@@ -22,16 +18,18 @@ export class RestoreUserTransaction extends BaseTransaction<
   }
 
   protected async execute(
-    data: RestoreUserObj,
     manager: EntityManager,
+    id: number,
+    parentId: number,
+    user: User,
   ): Promise<User> {
     const restoredUser = await this.userService.restoreOneWithEntityManager(
-      data.id,
-      data.user.id,
       manager,
+      id,
+      parentId,
     );
     await this.bankClientProxy
-      .send('restored_user', { currentUser: data.user, restoredUser })
+      .send('restored_user', { payload: restoredUser, user })
       .toPromise();
     return restoredUser;
   }
