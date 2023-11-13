@@ -3,6 +3,7 @@ import {
   WebSocketServer,
   OnGatewayConnection,
   OnGatewayDisconnect,
+  SubscribeMessage,
 } from '@nestjs/websockets';
 import { CACHE_MANAGER, Inject, UseGuards } from '@nestjs/common';
 import { Server } from 'socket.io';
@@ -14,6 +15,8 @@ import { CacheKeys, EncryptedUserObj, UserRoles } from 'src/types';
 type UserStatusType = Socket['user'] & {
   lastConnection?: string | null;
 };
+
+type UserStatusEventPayloadType = Record<'payload', number>;
 
 @WebSocketGateway({
   path: '/api/v1/user/socket/connection',
@@ -34,8 +37,8 @@ export class UserConnectionGateWay
 
   constructor(@Inject(CACHE_MANAGER) private readonly cacheService: Cache) {}
 
-  getCacheKey(user: UserStatusType) {
-    return `${CacheKeys.USERS_STATUS}.${process.env.PORT}.${user.id}`;
+  getCacheKey(id: number) {
+    return `${CacheKeys.USERS_STATUS}.${process.env.PORT}.${id}`;
   }
 
   getTtl(): number {
@@ -43,25 +46,30 @@ export class UserConnectionGateWay
     return 15778476000;
   }
 
-  getUserStatus(user: EncryptedUserObj): Promise<UserStatusType | undefined> {
-    const cacheKey = this.getCacheKey(user);
+  getUserStatus(id: number): Promise<UserStatusType | undefined> {
+    const cacheKey = this.getCacheKey(id);
     return this.cacheService.get(cacheKey);
   }
 
   async setUserStatus(user: UserStatusType): Promise<void> {
-    const cacheKey = this.getCacheKey(user);
+    const cacheKey = this.getCacheKey(user.id);
     const ttl = this.getTtl();
     await this.cacheService.set(cacheKey, user, ttl);
   }
 
-  emitUserStatus(user: UserStatusType): void {
-    if (user.role === UserRoles.OWNER) {
-      this.wss.emit('user-status', user);
-    }
+  emitUserStatusToAll(user: UserStatusType | null): void {
+    this.wss.emit('user-status', user);
+  }
+
+  emitUserStatusToClient(
+    client: Socket,
+    user: UserStatusType | undefined,
+  ): void {
+    this.wss.to(client.id).emit('user-status', user);
   }
 
   async handleConnection(client: Socket) {
-    let userStatus = await this.getUserStatus(client.user);
+    let userStatus = await this.getUserStatus(client.user.id);
 
     userStatus = Object.assign<EncryptedUserObj, Partial<UserStatusType>>(
       client.user,
@@ -70,11 +78,11 @@ export class UserConnectionGateWay
 
     await this.setUserStatus(userStatus);
 
-    this.emitUserStatus(userStatus);
+    this.emitUserStatusToAll(userStatus);
   }
 
   async handleDisconnect(client: Socket) {
-    let userStatus = await this.getUserStatus(client.user);
+    let userStatus = await this.getUserStatus(client.user.id);
 
     userStatus = Object.assign<EncryptedUserObj, Partial<UserStatusType>>(
       client.user,
@@ -83,6 +91,14 @@ export class UserConnectionGateWay
 
     await this.setUserStatus(userStatus);
 
-    this.emitUserStatus(userStatus);
+    this.emitUserStatusToAll(userStatus);
+  }
+
+  @SubscribeMessage('initial-user-status')
+  async userStatus(client: Socket, data: UserStatusEventPayloadType) {
+    if (client.user.role === UserRoles.OWNER && !!Number(data.payload)) {
+      const userStatus = await this.getUserStatus(data.payload);
+      this.emitUserStatusToClient(client, userStatus);
+    }
   }
 }
