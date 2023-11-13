@@ -133,7 +133,7 @@ export class UserConnectionGateWay
           acc = Object.assign(acc, this.convertUserStatusToUsersStatus(val));
           return acc;
         }, {} as UsersStatusType);
-      this.wss.emit('users-status', usersStatus);
+      this.wss.to(client.id).emit('users-status', usersStatus);
     }
   }
 }
