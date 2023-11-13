@@ -20,6 +20,8 @@ type UsersStatusType = Record<number, UserStatusType>;
 
 type InitialUserStatusEventPayloadType = Record<'payload', number>;
 
+type LogoutUserEventPayloadType = Record<'payload', number>;
+
 type UsersStatusEventPayloadType = Record<'payload', number[]>;
 
 @WebSocketGateway({
@@ -134,6 +136,21 @@ export class UserConnectionGateWay
           return acc;
         }, {} as UsersStatusType);
       this.wss.to(client.id).emit('users-status', usersStatus);
+    }
+  }
+
+  @SubscribeMessage('logout-user')
+  async logoutUser(client: Socket, data: LogoutUserEventPayloadType) {
+    if (client.user.role === UserRoles.OWNER) {
+      const userStatus: UserStatusType | undefined = await this.getUserStatus(
+        data.payload,
+      );
+      if (userStatus) {
+        this.wss.emit(
+          'logout-user',
+          this.convertUserStatusToUsersStatus(userStatus),
+        );
+      }
     }
   }
 }
