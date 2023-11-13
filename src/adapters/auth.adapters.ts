@@ -1,16 +1,11 @@
 import { INestApplication, UnauthorizedException } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { IoAdapter } from '@nestjs/platform-socket.io';
-import { Socket, Server } from 'socket.io';
-import { User } from 'src/entities';
+import { Socket as Sckt, Server } from 'socket.io';
+import { EncryptedUserObj } from 'src/types';
 
-export interface CustomSocket extends Socket {
-  user: Pick<User, 'id' | 'email' | 'firstName' | 'lastName' | 'role'> & {
-    expiration: number;
-    iat: number;
-    exp: number;
-    lastConnection: Date | null;
-  };
+export interface Socket extends Sckt {
+  user: EncryptedUserObj;
 }
 
 export class AuthAdapter extends IoAdapter {
@@ -27,7 +22,7 @@ export class AuthAdapter extends IoAdapter {
     const server: Server = super.createIOServer(port, options);
     const unAuthorizedError = new UnauthorizedException('Unauthorized');
 
-    server.use((socket: CustomSocket, next) => {
+    server.use((socket: Socket, next) => {
       const bearerToken = socket.handshake.headers.authorization;
 
       if (bearerToken) {

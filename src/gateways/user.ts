@@ -8,14 +8,19 @@ import {
 import { CACHE_MANAGER, Inject, UseGuards } from '@nestjs/common';
 import { Server } from 'socket.io';
 import { JwtSocketGuard } from 'src/guards';
-import { CustomSocket } from 'src/adapters';
+import { Socket } from 'src/adapters';
 import { Cache } from 'cache-manager';
-import { CacheKeys, UserRoles } from 'src/types';
-import { Cron, CronExpression } from '@nestjs/schedule';
+import { CacheKeys, EncryptedUserObj, UserRoles } from 'src/types';
 
-type UsersStatusType = Record<number, CustomSocket['user']>;
+type UserStatusType = Socket['user'] & {
+  lastConnection?: string | null;
+};
 
-type CachedUsersStatusType = Record<string, UsersStatusType>;
+type UsersStatusType = Record<number, UserStatusType>;
+
+type InitialUserStatusEventPayloadType = Record<'payload', number>;
+
+type UsersStatusEventPayloadType = Record<'payload', number[]>;
 
 @WebSocketGateway({
   path: '/api/v1/user/socket/connection',
@@ -36,93 +41,99 @@ export class UserConnectionGateWay
 
   constructor(@Inject(CACHE_MANAGER) private readonly cacheService: Cache) {}
 
-  getCacheKey() {
-    return `${CacheKeys.USERS_STATUS}.${process.env.PORT}`;
+  getCacheKey(id: number) {
+    return `${CacheKeys.USERS_STATUS}.${process.env.PORT}.${id}`;
   }
 
-  async getCachedData(): Promise<CachedUsersStatusType> {
-    const cacheKey = this.getCacheKey();
-    const cachedData =
-      (await this.cacheService.get<CachedUsersStatusType>(cacheKey)) || {};
-    return cachedData;
+  getTtl(): number {
+    // 6 month
+    return 15778476000;
   }
 
-  async cacheData(data: CachedUsersStatusType): Promise<void> {
-    const cacheKey = this.getCacheKey();
-    await this.cacheService.set(cacheKey, data);
+  getUserStatus(id: number): Promise<UserStatusType | undefined> {
+    const cacheKey = this.getCacheKey(id);
+    return this.cacheService.get(cacheKey);
   }
 
-  async getCachedUsersStatus(): Promise<UsersStatusType> {
-    const cacheKey = this.getCacheKey();
-    const cachedData = await this.getCachedData();
-    if (!cachedData[cacheKey]) {
-      cachedData[cacheKey] = {};
-    }
-    return cachedData[cacheKey];
+  async setUserStatus(user: UserStatusType): Promise<void> {
+    const cacheKey = this.getCacheKey(user.id);
+    const ttl = this.getTtl();
+    await this.cacheService.set(cacheKey, user, ttl);
   }
 
-  async cacheUsersStatus(data: UsersStatusType): Promise<void> {
-    const cacheKey = this.getCacheKey();
-    const newData = { [cacheKey]: data };
-    await this.cacheData(newData);
+  convertUserStatusToUsersStatus(user: UserStatusType): UsersStatusType {
+    return { [user.id]: user };
   }
 
-  async handleConnection(client: CustomSocket) {
-    const usersStatus = await this.getCachedUsersStatus();
-    usersStatus[client.user.id] = Object.assign(client.user, {
-      lastConnection: null,
-    });
-    await this.cacheUsersStatus(usersStatus);
-    this.emitUsersStatuEvent(usersStatus);
+  emitUserStatusToAll(user: UsersStatusType): void {
+    this.wss.emit('user-status', user);
   }
 
-  async handleDisconnect(client: CustomSocket) {
-    const usersStatus = await this.getCachedUsersStatus();
-    usersStatus[client.user.id] = Object.assign(client.user, {
-      lastConnection: new Date().toISOString(),
-    });
-    await this.cacheUsersStatus(usersStatus);
-    this.emitUsersStatuEvent(usersStatus);
+  async handleConnection(client: Socket) {
+    let userStatus = await this.getUserStatus(client.user.id);
+
+    userStatus = Object.assign<EncryptedUserObj, Partial<UserStatusType>>(
+      client.user,
+      { lastConnection: null },
+    );
+
+    await this.setUserStatus(userStatus);
+
+    this.emitUserStatusToAll(this.convertUserStatusToUsersStatus(userStatus));
   }
 
-  emitUsersStatuEvent(data: UsersStatusType) {
-    this.wss.emit('users_status', data);
+  async handleDisconnect(client: Socket) {
+    let userStatus = await this.getUserStatus(client.user.id);
+
+    userStatus = Object.assign<EncryptedUserObj, Partial<UserStatusType>>(
+      client.user,
+      { lastConnection: new Date().toISOString() },
+    );
+
+    await this.setUserStatus(userStatus);
+
+    this.emitUserStatusToAll(this.convertUserStatusToUsersStatus(userStatus));
   }
 
-  @SubscribeMessage('users_status')
-  async usersStatusSubscription(client: CustomSocket) {
-    if (client.user.role === UserRoles.OWNER) {
-      const usersStatus = await this.getCachedUsersStatus();
-      this.wss.to(client.id).emit('users_status', usersStatus);
-    }
-  }
-
-  @SubscribeMessage('logout_user')
-  async logoutUserSubscription(
-    client: CustomSocket,
-    data: Record<'id', number>,
+  @SubscribeMessage('initial-user-status')
+  async initialUserStatus(
+    client: Socket,
+    data: InitialUserStatusEventPayloadType,
   ) {
-    if (client.user.role === UserRoles.OWNER) {
-      const usersStatus = await this.getCachedUsersStatus();
-      if (usersStatus[data.id]) {
-        this.wss.emit('logout_user', usersStatus[data.id]);
+    if (client.user.role === UserRoles.OWNER && !!Number(data.payload)) {
+      const findedUserStatus: UserStatusType | undefined =
+        await this.getUserStatus(data.payload);
+
+      let userStatus: UsersStatusType | object;
+      if (!findedUserStatus) {
+        userStatus = {};
+      } else {
+        userStatus = this.convertUserStatusToUsersStatus(findedUserStatus);
       }
+
+      this.wss.to(client.id).emit('initial-user-status', userStatus);
     }
   }
 
-  @Cron(CronExpression.EVERY_WEEK)
-  async removeUsersStatus(): Promise<void> {
-    const usersStatus = await this.getCachedUsersStatus();
-    for (const userStatus in usersStatus) {
-      if (
-        usersStatus[userStatus].lastConnection &&
-        new Date(usersStatus[userStatus].lastConnection).getTime() <=
-          new Date().getTime() - 604800000
-      ) {
-        delete usersStatus[userStatus];
-      }
+  @SubscribeMessage('users-status')
+  async usersStatus(client: Socket, data: UsersStatusEventPayloadType) {
+    if (
+      client.user.role === UserRoles.OWNER &&
+      Array.isArray(data.payload) &&
+      data.payload.every((id) => !!Number(id))
+    ) {
+      const cachedUsersStatus = await Promise.all(
+        data.payload.map((id) => this.getUserStatus(id)),
+      );
+      const usersStatus = cachedUsersStatus
+        .filter(
+          (userStatus: UserStatusType | undefined) => userStatus && userStatus,
+        )
+        .reduce((acc, val) => {
+          acc = Object.assign(acc, this.convertUserStatusToUsersStatus(val));
+          return acc;
+        }, {} as UsersStatusType);
+      this.wss.to(client.id).emit('users-status', usersStatus);
     }
-    await this.cacheUsersStatus(usersStatus);
-    this.emitUsersStatuEvent(usersStatus);
   }
 }
