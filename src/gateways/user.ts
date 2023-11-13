@@ -16,7 +16,11 @@ type UserStatusType = Socket['user'] & {
   lastConnection?: string | null;
 };
 
-type UserStatusEventPayloadType = Record<'payload', number>;
+type UsersStatusType = Record<number, UserStatusType>;
+
+type InitialUserStatusEventPayloadType = Record<'payload', number>;
+
+type UsersStatusEventPayloadType = Record<'payload', number[]>;
 
 @WebSocketGateway({
   path: '/api/v1/user/socket/connection',
@@ -57,15 +61,12 @@ export class UserConnectionGateWay
     await this.cacheService.set(cacheKey, user, ttl);
   }
 
-  emitUserStatusToAll(user: UserStatusType | null): void {
-    this.wss.emit('user-status', user);
+  convertUserStatusToUsersStatus(user: UserStatusType): UsersStatusType {
+    return { [user.id]: user };
   }
 
-  emitUserStatusToClient(
-    client: Socket,
-    user: UserStatusType | undefined,
-  ): void {
-    this.wss.to(client.id).emit('user-status', user);
+  emitUserStatusToAll(user: UsersStatusType): void {
+    this.wss.emit('user-status', user);
   }
 
   async handleConnection(client: Socket) {
@@ -78,7 +79,7 @@ export class UserConnectionGateWay
 
     await this.setUserStatus(userStatus);
 
-    this.emitUserStatusToAll(userStatus);
+    this.emitUserStatusToAll(this.convertUserStatusToUsersStatus(userStatus));
   }
 
   async handleDisconnect(client: Socket) {
@@ -91,14 +92,48 @@ export class UserConnectionGateWay
 
     await this.setUserStatus(userStatus);
 
-    this.emitUserStatusToAll(userStatus);
+    this.emitUserStatusToAll(this.convertUserStatusToUsersStatus(userStatus));
   }
 
   @SubscribeMessage('initial-user-status')
-  async userStatus(client: Socket, data: UserStatusEventPayloadType) {
+  async initialUserStatus(
+    client: Socket,
+    data: InitialUserStatusEventPayloadType,
+  ) {
     if (client.user.role === UserRoles.OWNER && !!Number(data.payload)) {
-      const userStatus = await this.getUserStatus(data.payload);
-      this.emitUserStatusToClient(client, userStatus);
+      const findedUserStatus: UserStatusType | undefined =
+        await this.getUserStatus(data.payload);
+
+      let userStatus: UsersStatusType | object;
+      if (!findedUserStatus) {
+        userStatus = {};
+      } else {
+        userStatus = this.convertUserStatusToUsersStatus(findedUserStatus);
+      }
+
+      this.wss.to(client.id).emit('initial-user-status', userStatus);
+    }
+  }
+
+  @SubscribeMessage('users-status')
+  async usersStatus(client: Socket, data: UsersStatusEventPayloadType) {
+    if (
+      client.user.role === UserRoles.OWNER &&
+      Array.isArray(data.payload) &&
+      data.payload.every((id) => !!Number(id))
+    ) {
+      const cachedUsersStatus = await Promise.all(
+        data.payload.map((id) => this.getUserStatus(id)),
+      );
+      const usersStatus = cachedUsersStatus
+        .filter(
+          (userStatus: UserStatusType | undefined) => userStatus && userStatus,
+        )
+        .reduce((acc, val) => {
+          acc = Object.assign(acc, this.convertUserStatusToUsersStatus(val));
+          return acc;
+        }, {} as UsersStatusType);
+      this.wss.emit('users-status', usersStatus);
     }
   }
 }
