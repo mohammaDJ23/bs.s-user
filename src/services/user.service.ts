@@ -14,6 +14,7 @@ import {
   LastWeekDto,
   UpdateUserByOwnerDto,
   UpdateUserDto,
+  OwnerListFiltersDto,
 } from '../dtos';
 import { User } from '../entities';
 import { hash } from 'bcryptjs';
@@ -335,6 +336,43 @@ export class UserService {
       .setParameters({
         q: filters.q,
         roles: filters.roles,
+        fromDate: filters.fromDate,
+        toDate: filters.toDate,
+      })
+      .getManyAndCount();
+  }
+
+  findAllOwners(
+    page: number,
+    take: number,
+    filters: OwnerListFiltersDto,
+  ): Promise<[User[], number]> {
+    return this.userRepository
+      .createQueryBuilder('user')
+      .take(take)
+      .skip((page - 1) * take)
+      .orderBy('user.createdAt', 'DESC')
+      .where(
+        new Brackets((query) =>
+          query
+            .where('to_tsvector(user.firstName) @@ plainto_tsquery(:q)')
+            .orWhere('to_tsvector(user.lastName) @@ plainto_tsquery(:q)')
+            .orWhere('to_tsvector(user.phone) @@ plainto_tsquery(:q)')
+            .orWhere("user.firstName ILIKE '%' || :q || '%'")
+            .orWhere("user.lastName ILIKE '%' || :q || '%'")
+            .orWhere("user.phone ILIKE '%' || :q || '%'"),
+        ),
+      )
+      .andWhere('user.role = :role')
+      .andWhere(
+        'CASE WHEN (:fromDate)::BIGINT > 0 THEN COALESCE(EXTRACT(EPOCH FROM date(user.createdAt)) * 1000, 0)::BIGINT >= (:fromDate)::BIGINT ELSE TRUE END',
+      )
+      .andWhere(
+        'CASE WHEN (:toDate)::BIGINT > 0 THEN COALESCE(EXTRACT(EPOCH FROM date(user.createdAt)) * 1000, 0)::BIGINT <= (:toDate)::BIGINT ELSE TRUE END',
+      )
+      .setParameters({
+        q: filters.q,
+        role: UserRoles.OWNER,
         fromDate: filters.fromDate,
         toDate: filters.toDate,
       })
