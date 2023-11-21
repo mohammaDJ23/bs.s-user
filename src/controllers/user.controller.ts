@@ -25,7 +25,6 @@ import {
   AccessTokenDto,
   UserListFiltersDto,
   DeletedUserListFiltersDto,
-  OwnerListFiltersDto,
 } from 'src/dtos';
 import {
   CurrentUser,
@@ -50,7 +49,7 @@ import {
 } from 'src/guards';
 import { User } from 'src/entities';
 import { UserRoles } from 'src/types';
-import { ParseOwnerListFiltersPipe, ParseUserListFiltersPipe } from 'src/pipes';
+import { ParseUserListFiltersPipe } from 'src/pipes';
 import {
   LastWeekUsersSerializerInterceptor,
   UsersSerializerInterceptor,
@@ -186,7 +185,7 @@ export class userController {
   @UseInterceptors(UsersSerializerInterceptor)
   @ApiQuery({ name: 'page', type: 'number' })
   @ApiQuery({ name: 'take', type: 'number' })
-  @ApiParam({ name: 'filters', type: OwnerListFiltersDto })
+  @ApiParam({ name: 'filters', type: UserListFiltersDto })
   @ApiBearerAuth()
   @ApiResponse({ status: HttpStatus.OK, type: UserDto, isArray: true })
   @ApiResponse({ status: HttpStatus.UNAUTHORIZED, type: ErrorDto })
@@ -194,7 +193,7 @@ export class userController {
   findAllOwners(
     @Query('page', ParseIntPipe) page: number,
     @Query('take', ParseIntPipe) take: number,
-    @Query('filters', ParseOwnerListFiltersPipe) filters: OwnerListFiltersDto,
+    @Query('filters', ParseUserListFiltersPipe) filters: UserListFiltersDto,
   ): Promise<[User[], number]> {
     return this.userService.findAllOwners(page, take, filters);
   }

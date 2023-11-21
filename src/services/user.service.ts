@@ -14,7 +14,6 @@ import {
   LastWeekDto,
   UpdateUserByOwnerDto,
   UpdateUserDto,
-  OwnerListFiltersDto,
 } from '../dtos';
 import { User } from '../entities';
 import { hash } from 'bcryptjs';
@@ -335,10 +334,10 @@ export class UserService {
         'CASE WHEN (:toDate)::BIGINT > 0 THEN COALESCE(EXTRACT(EPOCH FROM date(user.createdAt)) * 1000, 0)::BIGINT <= (:toDate)::BIGINT ELSE TRUE END',
       )
       .setParameters({
-        q: filters.q,
-        roles: filters.roles,
-        fromDate: filters.fromDate,
-        toDate: filters.toDate,
+        q: filters.q || '',
+        roles: filters.roles || Object.values(UserRoles),
+        fromDate: filters.fromDate || 0,
+        toDate: filters.toDate || 0,
       })
       .getManyAndCount();
   }
@@ -346,10 +345,11 @@ export class UserService {
   findAllOwners(
     page: number,
     take: number,
-    filters: OwnerListFiltersDto,
+    filters: UserListFiltersDto,
   ): Promise<[User[], number]> {
     return this.userRepository
       .createQueryBuilder('user')
+      .leftJoinAndSelect('user.parent', 'parent')
       .take(take)
       .skip((page - 1) * take)
       .orderBy('user.createdAt', 'DESC')
@@ -372,10 +372,10 @@ export class UserService {
         'CASE WHEN (:toDate)::BIGINT > 0 THEN COALESCE(EXTRACT(EPOCH FROM date(user.createdAt)) * 1000, 0)::BIGINT <= (:toDate)::BIGINT ELSE TRUE END',
       )
       .setParameters({
-        q: filters.q,
+        q: filters.q || '',
         role: UserRoles.OWNER,
-        fromDate: filters.fromDate,
-        toDate: filters.toDate,
+        fromDate: filters.fromDate || 0,
+        toDate: filters.toDate || 0,
       })
       .getManyAndCount();
   }
