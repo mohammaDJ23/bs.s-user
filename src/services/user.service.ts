@@ -312,6 +312,7 @@ export class UserService {
   ): Promise<[User[], number]> {
     return this.userRepository
       .createQueryBuilder('user')
+      .leftJoinAndSelect('user.parent', 'parent')
       .take(take)
       .skip((page - 1) * take)
       .orderBy('user.createdAt', 'DESC')
