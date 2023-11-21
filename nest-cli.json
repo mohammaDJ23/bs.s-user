@@ -1,8 +1,15 @@
 {
   "$schema": "https://json.schemastore.org/nest-cli",
   "collection": "@nestjs/schematics",
-  "sourceRoot": "src",
+  "sourceRoot": ".",
   "compilerOptions": {
-    "assets": ["./firebase.config.json"]
+    "watchAssets": true,
+    "assets": [
+      {
+        "include": "./firebase.config.json",
+        "outDir": "dist",
+        "watchAssets": true
+      }
+    ]
   }
 }
