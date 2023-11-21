@@ -96,3 +96,5 @@ export interface NotificationObj extends UserObj {
     options?: RequestOptions;
   };
 }
+
+export type SocketPayloadType<T> = Record<'payload', T>;

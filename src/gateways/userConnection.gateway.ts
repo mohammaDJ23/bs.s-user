@@ -10,19 +10,18 @@ import { Server } from 'socket.io';
 import { JwtSocketGuard } from 'src/guards';
 import { Socket } from 'src/adapters';
 import { Cache } from 'cache-manager';
-import { CacheKeys, EncryptedUserObj, UserRoles } from 'src/types';
+import {
+  CacheKeys,
+  EncryptedUserObj,
+  SocketPayloadType,
+  UserRoles,
+} from 'src/types';
 
 type UserStatusType = Socket['user'] & {
   lastConnection?: string | null;
 };
 
 type UsersStatusType = Record<number, UserStatusType>;
-
-type InitialUserStatusEventPayloadType = Record<'payload', number>;
-
-type LogoutUserEventPayloadType = Record<'payload', number>;
-
-type UsersStatusEventPayloadType = Record<'payload', number[]>;
 
 @WebSocketGateway({
   path: '/api/v1/user/socket/connection',
@@ -98,10 +97,7 @@ export class UserConnectionGateWay
   }
 
   @SubscribeMessage('initial-user-status')
-  async initialUserStatus(
-    client: Socket,
-    data: InitialUserStatusEventPayloadType,
-  ) {
+  async initialUserStatus(client: Socket, data: SocketPayloadType<number>) {
     if (client.user.role === UserRoles.OWNER && !!Number(data.payload)) {
       const findedUserStatus: UserStatusType | undefined =
         await this.getUserStatus(data.payload);
@@ -118,7 +114,7 @@ export class UserConnectionGateWay
   }
 
   @SubscribeMessage('users-status')
-  async usersStatus(client: Socket, data: UsersStatusEventPayloadType) {
+  async usersStatus(client: Socket, data: SocketPayloadType<number[]>) {
     if (
       client.user.role === UserRoles.OWNER &&
       Array.isArray(data.payload) &&
@@ -140,7 +136,7 @@ export class UserConnectionGateWay
   }
 
   @SubscribeMessage('logout-user')
-  async logoutUser(client: Socket, data: LogoutUserEventPayloadType) {
+  async logoutUser(client: Socket, data: SocketPayloadType<number>) {
     if (client.user.role === UserRoles.OWNER) {
       const userStatus: UserStatusType | undefined = await this.getUserStatus(
         data.payload,

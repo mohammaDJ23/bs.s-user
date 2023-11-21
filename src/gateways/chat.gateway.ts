@@ -8,9 +8,8 @@ import { Server } from 'socket.io';
 import { JwtSocketGuard } from 'src/guards';
 import { FirebaseAdmin, InjectFirebaseAdmin } from 'nestjs-firebase';
 import { Socket } from 'src/adapters';
-import { UserObj } from 'src/types';
-
-type StartConversationEventPayloadType = Record<'payload', UserObj>;
+import { SocketPayloadType } from 'src/types';
+import { User } from 'src/entities';
 
 @WebSocketGateway({
   path: '/api/v1/user/socket/chat',
@@ -32,5 +31,5 @@ export class ChatGateWay {
   ) {}
 
   @SubscribeMessage('start-conversation')
-  startConversation(client: Socket, data: StartConversationEventPayloadType) {}
+  startConversation(client: Socket, data: SocketPayloadType<User>) {}
 }
