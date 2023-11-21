@@ -48,6 +48,7 @@
     "dotenv": "^16.0.2",
     "env-cmd": "^10.1.0",
     "mysql2": "^2.3.3",
+    "nestjs-firebase": "^10.2.0",
     "passport": "^0.6.0",
     "passport-jwt": "^4.0.0",
     "pg": "^8.8.0",
