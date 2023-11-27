@@ -14,6 +14,11 @@ export class UserListFiltersDto {
   @ApiProperty({ enum: [UserRoles] })
   roles: UserRoles[];
 
+  @IsNumber({}, { each: true })
+  @IsOptional()
+  @ApiProperty()
+  ids: number[];
+
   @Type(() => Number)
   @IsNumber()
   @IsOptional()

@@ -333,11 +333,15 @@ export class UserService {
       .andWhere(
         'CASE WHEN (:toDate)::BIGINT > 0 THEN COALESCE(EXTRACT(EPOCH FROM date(user.createdAt)) * 1000, 0)::BIGINT <= (:toDate)::BIGINT ELSE TRUE END',
       )
+      .andWhere(
+        'CASE WHEN (ARRAY_LENGTH(:ids))::BOOL = TRUE THEN user.id ANY(:ids) ELSE TRUE END',
+      )
       .setParameters({
         q: filters.q || '',
         roles: filters.roles || Object.values(UserRoles),
         fromDate: filters.fromDate || 0,
         toDate: filters.toDate || 0,
+        ids: filters.ids || [],
       })
       .getManyAndCount();
   }
@@ -371,11 +375,15 @@ export class UserService {
       .andWhere(
         'CASE WHEN (:toDate)::BIGINT > 0 THEN COALESCE(EXTRACT(EPOCH FROM date(user.createdAt)) * 1000, 0)::BIGINT <= (:toDate)::BIGINT ELSE TRUE END',
       )
+      .andWhere(
+        'CASE WHEN (ARRAY_LENGTH(:ids))::BOOL = TRUE THEN user.id ANY(:ids) ELSE TRUE END',
+      )
       .setParameters({
         q: filters.q || '',
         role: UserRoles.OWNER,
         fromDate: filters.fromDate || 0,
         toDate: filters.toDate || 0,
+        ids: filters.ids || [],
       })
       .getManyAndCount();
   }
