@@ -334,7 +334,7 @@ export class UserService {
         'CASE WHEN (:toDate)::BIGINT > 0 THEN COALESCE(EXTRACT(EPOCH FROM date(user.createdAt)) * 1000, 0)::BIGINT <= (:toDate)::BIGINT ELSE TRUE END',
       )
       .andWhere(
-        'CASE WHEN (ARRAY_LENGTH(:ids))::BOOL = TRUE THEN user.id ANY(:ids) ELSE TRUE END',
+        'CASE WHEN ARRAY_LENGTH((:ids)::INT[], 1) > 0 THEN user.id = ANY(:ids) ELSE TRUE END',
       )
       .setParameters({
         q: filters.q || '',
@@ -376,7 +376,7 @@ export class UserService {
         'CASE WHEN (:toDate)::BIGINT > 0 THEN COALESCE(EXTRACT(EPOCH FROM date(user.createdAt)) * 1000, 0)::BIGINT <= (:toDate)::BIGINT ELSE TRUE END',
       )
       .andWhere(
-        'CASE WHEN (ARRAY_LENGTH(:ids))::BOOL = TRUE THEN user.id ANY(:ids) ELSE TRUE END',
+        'CASE WHEN ARRAY_LENGTH((:ids)::INT[], 1) > 0 THEN user.id = ANY(:ids) ELSE TRUE END',
       )
       .setParameters({
         q: filters.q || '',
