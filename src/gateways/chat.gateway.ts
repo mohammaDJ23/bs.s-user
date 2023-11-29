@@ -3,7 +3,7 @@ import {
   WebSocketGateway,
   WebSocketServer,
 } from '@nestjs/websockets';
-import { UseGuards } from '@nestjs/common';
+import { InternalServerErrorException, UseGuards } from '@nestjs/common';
 import { Server } from 'socket.io';
 import { v4 as uuid } from 'uuid';
 import { JwtSocketGuard } from 'src/guards';
@@ -55,50 +55,59 @@ export class ChatGateWay {
 
   @SubscribeMessage('start-conversation')
   async startConversation(client: Socket, data: SocketPayloadType<User>) {
-    const creatorRoomId = `${client.user.id}.${data.payload.id}`;
-    const targetRoomId = `${data.payload.id}.${client.user.id}`;
+    try {
+      const creatorRoomId = `${client.user.id}.${data.payload.id}`;
+      const targetRoomId = `${data.payload.id}.${client.user.id}`;
 
-    const result = await this.firebase.firestore
-      .collection('conversation')
-      .where(
-        Filter.or(
-          Filter.where('roomId', '==', creatorRoomId),
-          Filter.where('roomId', '==', targetRoomId),
-        ),
-      )
-      .get();
-
-    if (result.empty) {
-      const doc = {
-        id: uuid(),
-        creatorId: client.user.id,
-        targetId: data.payload.id,
-        roomId: creatorRoomId,
-        contributors: [client.user.id],
-        lastMessage: null,
-        createdAt: FieldValue.serverTimestamp(),
-        updatedAt: FieldValue.serverTimestamp(),
-        deletedAt: null,
-        deletedBy: null,
-      };
-
-      await this.firebase.firestore
+      const result = await this.firebase.firestore
         .collection('conversation')
-        .doc(creatorRoomId)
-        .set(doc);
-    } else {
-      const [doc] = result.docs;
-      const docData = doc.data();
+        .where(
+          Filter.or(
+            Filter.where('roomId', '==', creatorRoomId),
+            Filter.where('roomId', '==', targetRoomId),
+          ),
+        )
+        .get();
 
-      if (!docData.contributors.includes(client.user.id)) {
+      if (result.empty) {
+        const doc = {
+          id: uuid(),
+          creatorId: client.user.id,
+          targetId: data.payload.id,
+          roomId: creatorRoomId,
+          contributors: [client.user.id],
+          lastMessage: null,
+          createdAt: FieldValue.serverTimestamp(),
+          updatedAt: FieldValue.serverTimestamp(),
+          deletedAt: null,
+          deletedBy: null,
+        };
+
         await this.firebase.firestore
           .collection('conversation')
-          .doc(docData.roomId)
-          .update({
-            contributors: FieldValue.arrayUnion(client.user.id),
-            updatedAt: FieldValue.serverTimestamp(),
-          });
+          .doc(creatorRoomId)
+          .set(doc);
+      } else {
+        const [doc] = result.docs;
+        const docData = doc.data();
+
+        if (!docData.contributors.includes(client.user.id)) {
+          await this.firebase.firestore
+            .collection('conversation')
+            .doc(docData.roomId)
+            .update({
+              contributors: FieldValue.arrayUnion(client.user.id),
+              updatedAt: FieldValue.serverTimestamp(),
+            });
+        }
       }
+    } catch (error) {
+      this.wss
+        .to(client.id)
+        .emit(
+          'fail-start-conversation',
+          new InternalServerErrorException(error),
+        );
     }
   }
 }
