@@ -101,6 +101,8 @@ export class ChatGateWay {
             });
         }
       }
+
+      this.wss.to(client.id).emit('success-start-conversation');
     } catch (error) {
       this.wss
         .to(client.id)
