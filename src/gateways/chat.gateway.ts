@@ -102,7 +102,7 @@ export class ChatGateWay {
         }
       }
 
-      this.wss.to(client.id).emit('success-start-conversation');
+      this.wss.to(client.id).emit('success-start-conversation', data.payload);
     } catch (error) {
       this.wss
         .to(client.id)
