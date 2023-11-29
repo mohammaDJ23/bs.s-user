@@ -94,7 +94,10 @@ export class ChatGateWay {
         await this.firebase.firestore
           .collection('conversation')
           .doc(docData.roomId)
-          .update({ contributors: FieldValue.arrayUnion(client.user.id) });
+          .update({
+            contributors: FieldValue.arrayUnion(client.user.id),
+            updatedAt: FieldValue.serverTimestamp(),
+          });
       }
     }
   }
