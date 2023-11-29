@@ -28,9 +28,9 @@ interface ConversationDocObj {
   roomId: string;
   contributors: number[];
   lastMessage: MessageObj | null;
-  createdAt: FirebaseFirestore.FieldValue;
-  updatedAt: FirebaseFirestore.FieldValue;
-  deletedAt: FirebaseFirestore.FieldValue | null;
+  createdAt: FieldValue;
+  updatedAt: FieldValue;
+  deletedAt: FieldValue | null;
   deletedBy: number | null;
 }
 
@@ -54,5 +54,48 @@ export class ChatGateWay {
   ) {}
 
   @SubscribeMessage('start-conversation')
-  async startConversation(client: Socket, data: SocketPayloadType<User>) {}
+  async startConversation(client: Socket, data: SocketPayloadType<User>) {
+    const creatorRoomId = `${client.user.id}.${data.payload.id}`;
+    const targetRoomId = `${data.payload.id}.${client.user.id}`;
+
+    const result = await this.firebase.firestore
+      .collection('conversation')
+      .where(
+        Filter.or(
+          Filter.where('roomId', '==', creatorRoomId),
+          Filter.where('roomId', '==', targetRoomId),
+        ),
+      )
+      .get();
+
+    if (result.empty) {
+      const doc = {
+        id: uuid(),
+        creatorId: client.user.id,
+        targetId: data.payload.id,
+        roomId: creatorRoomId,
+        contributors: [client.user.id],
+        lastMessage: null,
+        createdAt: FieldValue.serverTimestamp(),
+        updatedAt: FieldValue.serverTimestamp(),
+        deletedAt: null,
+        deletedBy: null,
+      };
+
+      await this.firebase.firestore
+        .collection('conversation')
+        .doc(creatorRoomId)
+        .set(doc);
+    } else {
+      const [doc] = result.docs;
+      const docData = doc.data();
+
+      if (!docData.contributors.includes(client.user.id)) {
+        await this.firebase.firestore
+          .collection('conversation')
+          .doc(docData.roomId)
+          .update({ contributors: FieldValue.arrayUnion(client.user.id) });
+      }
+    }
+  }
 }
