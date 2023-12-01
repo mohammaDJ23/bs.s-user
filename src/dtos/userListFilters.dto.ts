@@ -1,5 +1,11 @@
 import { UserRoles } from 'src/types';
-import { IsString, IsNumber, IsEnum, IsOptional } from 'class-validator';
+import {
+  IsString,
+  IsNumber,
+  IsEnum,
+  IsOptional,
+  IsNumberString,
+} from 'class-validator';
 import { ApiProperty } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
 
@@ -14,6 +20,7 @@ export class UserListFiltersDto {
   @ApiProperty({ enum: [UserRoles] })
   roles: UserRoles[];
 
+  @Type(() => Number)
   @IsNumber({}, { each: true })
   @IsOptional()
   @ApiProperty()
