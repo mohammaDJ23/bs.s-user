@@ -10,7 +10,7 @@ import { JwtSocketGuard } from 'src/guards';
 import { FirebaseAdmin, InjectFirebaseAdmin } from 'nestjs-firebase';
 import { FieldValue, Filter } from '@google-cloud/firestore';
 import { Socket } from 'src/adapters';
-import { SocketPayloadType } from 'src/types';
+import { EncryptedUserObj, SocketPayloadType } from 'src/types';
 import { User } from 'src/entities';
 
 interface MessageObj {
@@ -18,6 +18,8 @@ interface MessageObj {
   id: string;
   text: string;
   createdAt: FieldValue;
+  updatedAt: FieldValue;
+  deletedAt: FieldValue | null;
   isReaded: boolean;
 }
 
@@ -32,6 +34,12 @@ interface ConversationDocObj {
   updatedAt: FieldValue;
   deletedAt: FieldValue | null;
   deletedBy: number | null;
+}
+
+interface SendMessageObj {
+  user: User;
+  conversation: ConversationDocObj;
+  text: string;
 }
 
 @WebSocketGateway({
@@ -53,11 +61,19 @@ export class ChatGateWay {
     @InjectFirebaseAdmin() private readonly firebase: FirebaseAdmin,
   ) {}
 
+  getCreatorRoomId(creator: EncryptedUserObj, target: User) {
+    return `${creator.id}.${target.id}`;
+  }
+
+  getTargetRoomId(target: User, creator: EncryptedUserObj) {
+    return `${target.id}.${creator.id}`;
+  }
+
   @SubscribeMessage('start-conversation')
   async startConversation(client: Socket, data: SocketPayloadType<User>) {
     try {
-      const creatorRoomId = `${client.user.id}.${data.payload.id}`;
-      const targetRoomId = `${data.payload.id}.${client.user.id}`;
+      const creatorRoomId = this.getCreatorRoomId(client.user, data.payload);
+      const targetRoomId = this.getTargetRoomId(data.payload, client.user);
 
       const result = await this.firebase.firestore
         .collection('conversation')
@@ -110,6 +126,70 @@ export class ChatGateWay {
           'fail-start-conversation',
           new InternalServerErrorException(error),
         );
+    }
+  }
+
+  @SubscribeMessage('send-message')
+  async sendMessage(client: Socket, data: SocketPayloadType<SendMessageObj>) {
+    try {
+      const creatorRoomId = this.getCreatorRoomId(
+        client.user,
+        data.payload.user,
+      );
+      const targetRoomId = this.getTargetRoomId(data.payload.user, client.user);
+
+      const result = await this.firebase.firestore
+        .collection('conversation')
+        .where(
+          Filter.or(
+            Filter.where('roomId', '==', creatorRoomId),
+            Filter.where('roomId', '==', targetRoomId),
+          ),
+        )
+        .get();
+
+      if (!result.empty) {
+        const message: MessageObj = {
+          id: uuid(),
+          userId: client.user.id,
+          text: data.payload.text,
+          isReaded: false,
+          createdAt: FieldValue.serverTimestamp(),
+          updatedAt: FieldValue.serverTimestamp(),
+          deletedAt: null,
+        };
+
+        const [doc] = result.docs;
+        const conversationDocData = doc.data() as ConversationDocObj;
+
+        const conversationDocRef = this.firebase.firestore
+          .collection('conversation')
+          .doc(conversationDocData.roomId);
+
+        const messageDocRef = conversationDocRef
+          .collection('messages')
+          .doc(message.id);
+
+        const batch = this.firebase.firestore.batch();
+
+        batch.update(conversationDocRef, {
+          contributors: FieldValue.arrayUnion(data.payload.user.id),
+          lastMessage: message,
+          updatedAt: FieldValue.serverTimestamp(),
+        });
+
+        batch.set(messageDocRef, message);
+
+        await batch.commit();
+
+        this.wss.to(client.id).emit('success-send-message', data.payload);
+      } else {
+        throw new Error('No document was found.');
+      }
+    } catch (error) {
+      this.wss
+        .to(client.id)
+        .emit('fail-send-message', new InternalServerErrorException(error));
     }
   }
 }
