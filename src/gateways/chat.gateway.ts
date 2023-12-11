@@ -107,15 +107,13 @@ export class ChatGateWay {
         const [doc] = result.docs;
         const docData = doc.data();
 
-        if (!docData.contributors.includes(client.user.id)) {
-          await this.firebase.firestore
-            .collection('conversation')
-            .doc(docData.roomId)
-            .update({
-              contributors: FieldValue.arrayUnion(client.user.id),
-              updatedAt: FieldValue.serverTimestamp(),
-            });
-        }
+        await this.firebase.firestore
+          .collection('conversation')
+          .doc(docData.roomId)
+          .update({
+            contributors: FieldValue.arrayUnion(client.user.id),
+            updatedAt: FieldValue.serverTimestamp(),
+          });
       }
 
       this.wss.to(client.id).emit('success-start-conversation', data.payload);
