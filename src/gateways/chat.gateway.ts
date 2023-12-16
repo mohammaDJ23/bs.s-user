@@ -12,6 +12,7 @@ import { FieldValue, Filter } from '@google-cloud/firestore';
 import { Socket } from 'src/adapters';
 import { EncryptedUserObj, SocketPayloadType } from 'src/types';
 import { User } from 'src/entities';
+import { UserService } from 'src/services';
 
 interface MessageObj {
   userId: number;
@@ -36,10 +37,20 @@ interface ConversationDocObj {
   deletedBy: number | null;
 }
 
-interface SendMessageObj {
+export interface ConversationObj {
   user: User;
   conversation: ConversationDocObj;
+}
+
+interface SendMessageObj extends ConversationObj {
   text: string;
+}
+
+export class Conversation implements ConversationObj {
+  constructor(
+    public readonly user: User,
+    public readonly conversation: ConversationDocObj,
+  ) {}
 }
 
 @WebSocketGateway({
@@ -59,6 +70,7 @@ export class ChatGateWay {
 
   constructor(
     @InjectFirebaseAdmin() private readonly firebase: FirebaseAdmin,
+    private readonly userService: UserService,
   ) {}
 
   getCreatorRoomId(creator: EncryptedUserObj, target: User) {
@@ -72,8 +84,12 @@ export class ChatGateWay {
   @SubscribeMessage('start-conversation')
   async startConversation(client: Socket, data: SocketPayloadType<User>) {
     try {
+      await this.userService.findByIdOrFail(data.payload.id);
+
       const creatorRoomId = this.getCreatorRoomId(client.user, data.payload);
       const targetRoomId = this.getTargetRoomId(data.payload, client.user);
+
+      let conversationDocObj: ConversationDocObj;
 
       const result = await this.firebase.firestore
         .collection('conversation')
@@ -86,7 +102,7 @@ export class ChatGateWay {
         .get();
 
       if (result.empty) {
-        const doc = {
+        const doc: ConversationDocObj = {
           id: uuid(),
           creatorId: client.user.id,
           targetId: data.payload.id,
@@ -103,9 +119,11 @@ export class ChatGateWay {
           .collection('conversation')
           .doc(creatorRoomId)
           .set(doc);
+
+        conversationDocObj = doc;
       } else {
         const [doc] = result.docs;
-        const docData = doc.data();
+        const docData = doc.data() as ConversationDocObj;
 
         await this.firebase.firestore
           .collection('conversation')
@@ -114,9 +132,16 @@ export class ChatGateWay {
             contributors: FieldValue.arrayUnion(client.user.id),
             updatedAt: FieldValue.serverTimestamp(),
           });
+
+        conversationDocObj = docData;
       }
 
-      this.wss.to(client.id).emit('success-start-conversation', data.payload);
+      this.wss
+        .to(client.id)
+        .emit(
+          'success-start-conversation',
+          new Conversation(data.payload, conversationDocObj),
+        );
     } catch (error) {
       this.wss
         .to(client.id)
