@@ -179,6 +179,25 @@ export class userController {
     return this.userService.findAll(page, take, filters);
   }
 
+  @Get('all/owners')
+  @HttpCode(HttpStatus.OK)
+  @UseGuards(RolesGuard)
+  @UseInterceptors(UsersSerializerInterceptor)
+  @ApiQuery({ name: 'page', type: 'number' })
+  @ApiQuery({ name: 'take', type: 'number' })
+  @ApiParam({ name: 'filters', type: UserListFiltersDto })
+  @ApiBearerAuth()
+  @ApiResponse({ status: HttpStatus.OK, type: UserDto, isArray: true })
+  @ApiResponse({ status: HttpStatus.UNAUTHORIZED, type: ErrorDto })
+  @ApiResponse({ status: HttpStatus.INTERNAL_SERVER_ERROR, type: ErrorDto })
+  findAllOwners(
+    @Query('page', ParseIntPipe) page: number,
+    @Query('take', ParseIntPipe) take: number,
+    @Query('filters', ParseUserListFiltersPipe) filters: UserListFiltersDto,
+  ): Promise<[User[], number]> {
+    return this.userService.findAllOwners(page, take, filters);
+  }
+
   @Get('all/deleted')
   @HttpCode(HttpStatus.OK)
   @Roles(UserRoles.OWNER)

@@ -10,7 +10,7 @@ import { APP_FILTER, APP_PIPE } from '@nestjs/core';
 import { PassportModule } from '@nestjs/passport';
 import { JwtModule } from '@nestjs/jwt';
 import { UserMessagePatternController, userController } from '../controllers';
-import { UserConnectionGateWay } from 'src/gateways';
+import { ChatGateWay, UserConnectionGateWay } from 'src/gateways';
 import { redisStore } from 'cache-manager-redis-yet';
 import {
   CreateUserTransaction,
@@ -21,9 +21,18 @@ import {
   UpdateUserTransaction,
 } from 'src/transactions';
 import { ScheduleModule } from '@nestjs/schedule';
+import { FirebaseModule } from 'nestjs-firebase';
+import { join } from 'path';
 
 @Module({
   imports: [
+    FirebaseModule.forRoot({
+      googleApplicationCredential: join(
+        __dirname,
+        '../',
+        'firebase.config.json',
+      ),
+    }),
     ScheduleModule.forRoot(),
     CacheModule.registerAsync({
       useFactory: async () => ({
@@ -108,6 +117,7 @@ import { ScheduleModule } from '@nestjs/schedule';
       }),
     },
     UserConnectionGateWay,
+    ChatGateWay,
   ],
 })
 export class AppModule {}
