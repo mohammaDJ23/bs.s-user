@@ -311,6 +311,7 @@ export class UserService {
   ): Promise<[User[], number]> {
     return this.userRepository
       .createQueryBuilder('user')
+      .leftJoinAndSelect('user.parent', 'parent')
       .take(take)
       .skip((page - 1) * take)
       .orderBy('user.createdAt', 'DESC')
@@ -332,11 +333,57 @@ export class UserService {
       .andWhere(
         'CASE WHEN (:toDate)::BIGINT > 0 THEN COALESCE(EXTRACT(EPOCH FROM date(user.createdAt)) * 1000, 0)::BIGINT <= (:toDate)::BIGINT ELSE TRUE END',
       )
+      .andWhere(
+        'CASE WHEN ARRAY_LENGTH((:ids)::INT[], 1) > 0 THEN user.id = ANY(:ids) ELSE TRUE END',
+      )
       .setParameters({
-        q: filters.q,
-        roles: filters.roles,
-        fromDate: filters.fromDate,
-        toDate: filters.toDate,
+        q: filters.q || '',
+        roles: filters.roles || Object.values(UserRoles),
+        fromDate: filters.fromDate || 0,
+        toDate: filters.toDate || 0,
+        ids: filters.ids || [],
+      })
+      .getManyAndCount();
+  }
+
+  findAllOwners(
+    page: number,
+    take: number,
+    filters: UserListFiltersDto,
+  ): Promise<[User[], number]> {
+    return this.userRepository
+      .createQueryBuilder('user')
+      .leftJoinAndSelect('user.parent', 'parent')
+      .take(take)
+      .skip((page - 1) * take)
+      .orderBy('user.createdAt', 'DESC')
+      .where(
+        new Brackets((query) =>
+          query
+            .where('to_tsvector(user.firstName) @@ plainto_tsquery(:q)')
+            .orWhere('to_tsvector(user.lastName) @@ plainto_tsquery(:q)')
+            .orWhere('to_tsvector(user.phone) @@ plainto_tsquery(:q)')
+            .orWhere("user.firstName ILIKE '%' || :q || '%'")
+            .orWhere("user.lastName ILIKE '%' || :q || '%'")
+            .orWhere("user.phone ILIKE '%' || :q || '%'"),
+        ),
+      )
+      .andWhere('user.role = :role')
+      .andWhere(
+        'CASE WHEN (:fromDate)::BIGINT > 0 THEN COALESCE(EXTRACT(EPOCH FROM date(user.createdAt)) * 1000, 0)::BIGINT >= (:fromDate)::BIGINT ELSE TRUE END',
+      )
+      .andWhere(
+        'CASE WHEN (:toDate)::BIGINT > 0 THEN COALESCE(EXTRACT(EPOCH FROM date(user.createdAt)) * 1000, 0)::BIGINT <= (:toDate)::BIGINT ELSE TRUE END',
+      )
+      .andWhere(
+        'CASE WHEN ARRAY_LENGTH((:ids)::INT[], 1) > 0 THEN user.id = ANY(:ids) ELSE TRUE END',
+      )
+      .setParameters({
+        q: filters.q || '',
+        role: UserRoles.OWNER,
+        fromDate: filters.fromDate || 0,
+        toDate: filters.toDate || 0,
+        ids: filters.ids || [],
       })
       .getManyAndCount();
   }
