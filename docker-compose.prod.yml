@@ -11,8 +11,8 @@ services:
     networks:
       - services_app-network
     volumes:
-      - /root/services/firebase/:/usr/src/app/
-      - /root/services/firebase/:/usr/src/app/dist/
+      - /root/services/firebase/:/
+      - /root/services/firebase/:/dist/
 
 networks:
   services_app-network:
