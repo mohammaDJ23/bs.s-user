@@ -10,6 +10,8 @@ services:
       - ${PORT}:${PORT}
     networks:
       - services_app-network
+    volumes:
+      - /root/services/firebase/:/usr/src/app/
 
 networks:
   services_app-network:
