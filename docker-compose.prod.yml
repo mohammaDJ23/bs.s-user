@@ -11,8 +11,8 @@ services:
     networks:
       - services_app-network
     volumes:
-      - /root/services/firebase/:/usr/src/app/
-      - /root/services/firebase/:/usr/src/app/dist/
+      - /root/services/firebase/firebase-bank-system.json:/usr/src/app/firebase-bank-system.json
+      - /root/services/firebase/firebase-bank-system.json:/usr/src/app/dist/firebase-bank-system.json
 
 networks:
   services_app-network:
