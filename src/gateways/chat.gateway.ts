@@ -67,6 +67,8 @@ export class Conversation implements ConversationObj {
 export class ChatGateWay {
   @WebSocketServer()
   private wss: Server;
+  private coversationCollection: string =
+    process.env.FIREBASE_CONVERSATION_COLLECTION!;
 
   constructor(
     @InjectFirebaseAdmin() private readonly firebase: FirebaseAdmin,
@@ -92,7 +94,7 @@ export class ChatGateWay {
       let conversationDocObj: ConversationDocObj;
 
       const result = await this.firebase.firestore
-        .collection('conversation')
+        .collection(this.coversationCollection)
         .where(
           Filter.or(
             Filter.where('roomId', '==', creatorRoomId),
@@ -116,7 +118,7 @@ export class ChatGateWay {
         };
 
         await this.firebase.firestore
-          .collection('conversation')
+          .collection(this.coversationCollection)
           .doc(creatorRoomId)
           .set(doc);
 
@@ -126,7 +128,7 @@ export class ChatGateWay {
         const docData = doc.data() as ConversationDocObj;
 
         await this.firebase.firestore
-          .collection('conversation')
+          .collection(this.coversationCollection)
           .doc(docData.roomId)
           .update({
             contributors: FieldValue.arrayUnion(client.user.id),
@@ -162,7 +164,7 @@ export class ChatGateWay {
       const targetRoomId = this.getTargetRoomId(data.payload.user, client.user);
 
       const result = await this.firebase.firestore
-        .collection('conversation')
+        .collection(this.coversationCollection)
         .where(
           Filter.or(
             Filter.where('roomId', '==', creatorRoomId),
@@ -186,7 +188,7 @@ export class ChatGateWay {
         const conversationDocData = doc.data() as ConversationDocObj;
 
         const conversationDocRef = this.firebase.firestore
-          .collection('conversation')
+          .collection(this.coversationCollection)
           .doc(conversationDocData.roomId);
 
         const messageDocRef = conversationDocRef
