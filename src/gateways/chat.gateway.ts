@@ -13,18 +13,20 @@ import { Socket } from 'src/adapters';
 import { EncryptedUserObj, SocketPayloadType } from 'src/types';
 import { User } from 'src/entities';
 import { UserService } from 'src/services';
+import { getConversationTargetId } from 'src/libs/conversationTargetId';
 
 interface MessageObj {
-  userId: number;
   id: string;
+  userId: number;
   text: string;
+  isReaded: boolean;
+  status: 'pending' | 'success' | 'error';
   createdAt: FieldValue;
   updatedAt: FieldValue;
   deletedAt: FieldValue | null;
-  isReaded: boolean;
 }
 
-interface ConversationDocObj {
+export interface ConversationDocObj {
   id: string;
   creatorId: number;
   targetId: number;
@@ -42,8 +44,9 @@ export interface ConversationObj {
   conversation: ConversationDocObj;
 }
 
-interface SendMessageObj extends ConversationObj {
-  text: string;
+interface SendMessageObj {
+  message: MessageObj;
+  roomId: string;
 }
 
 export class Conversation implements ConversationObj {
@@ -67,7 +70,7 @@ export class Conversation implements ConversationObj {
 export class ChatGateWay {
   @WebSocketServer()
   private wss: Server;
-  private coversationCollection: string =
+  private conversationCollection: string =
     process.env.FIREBASE_CONVERSATION_COLLECTION!;
 
   constructor(
@@ -94,7 +97,7 @@ export class ChatGateWay {
       let conversationDocObj: ConversationDocObj;
 
       const result = await this.firebase.firestore
-        .collection(this.coversationCollection)
+        .collection(this.conversationCollection)
         .where(
           Filter.or(
             Filter.where('roomId', '==', creatorRoomId),
@@ -118,7 +121,7 @@ export class ChatGateWay {
         };
 
         await this.firebase.firestore
-          .collection(this.coversationCollection)
+          .collection(this.conversationCollection)
           .doc(creatorRoomId)
           .set(doc);
 
@@ -128,7 +131,7 @@ export class ChatGateWay {
         const docData = doc.data() as ConversationDocObj;
 
         await this.firebase.firestore
-          .collection(this.coversationCollection)
+          .collection(this.conversationCollection)
           .doc(docData.roomId)
           .update({
             contributors: FieldValue.arrayUnion(client.user.id),
@@ -157,28 +160,18 @@ export class ChatGateWay {
   @SubscribeMessage('send-message')
   async sendMessage(client: Socket, data: SocketPayloadType<SendMessageObj>) {
     try {
-      const creatorRoomId = this.getCreatorRoomId(
-        client.user,
-        data.payload.user,
-      );
-      const targetRoomId = this.getTargetRoomId(data.payload.user, client.user);
-
       const result = await this.firebase.firestore
-        .collection(this.coversationCollection)
-        .where(
-          Filter.or(
-            Filter.where('roomId', '==', creatorRoomId),
-            Filter.where('roomId', '==', targetRoomId),
-          ),
-        )
+        .collection(this.conversationCollection)
+        .where('roomId', '==', data.payload.roomId)
         .get();
 
       if (!result.empty) {
         const message: MessageObj = {
-          id: uuid(),
-          userId: client.user.id,
-          text: data.payload.text,
-          isReaded: false,
+          id: data.payload.message.id,
+          userId: data.payload.message.userId,
+          text: data.payload.message.text,
+          isReaded: data.payload.message.isReaded,
+          status: 'success',
           createdAt: FieldValue.serverTimestamp(),
           updatedAt: FieldValue.serverTimestamp(),
           deletedAt: null,
@@ -188,7 +181,7 @@ export class ChatGateWay {
         const conversationDocData = doc.data() as ConversationDocObj;
 
         const conversationDocRef = this.firebase.firestore
-          .collection(this.coversationCollection)
+          .collection(this.conversationCollection)
           .doc(conversationDocData.roomId);
 
         const messageDocRef = conversationDocRef
@@ -198,7 +191,9 @@ export class ChatGateWay {
         const batch = this.firebase.firestore.batch();
 
         batch.update(conversationDocRef, {
-          contributors: FieldValue.arrayUnion(data.payload.user.id),
+          contributors: FieldValue.arrayUnion(
+            getConversationTargetId(client.user, conversationDocData),
+          ),
           lastMessage: message,
           updatedAt: FieldValue.serverTimestamp(),
         });
@@ -207,7 +202,9 @@ export class ChatGateWay {
 
         await batch.commit();
 
-        this.wss.to(client.id).emit('success-send-message', data.payload);
+        data.payload.message.status = 'success';
+
+        this.wss.emit(data.payload.roomId, data.payload);
       } else {
         throw new Error('No document was found.');
       }
