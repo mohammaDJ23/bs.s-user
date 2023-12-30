@@ -47,6 +47,7 @@ export interface ConversationObj {
 interface SendMessageObj {
   message: MessageObj;
   roomId: string;
+  conversationId: string;
 }
 
 export class Conversation implements ConversationObj {
@@ -162,7 +163,12 @@ export class ChatGateWay {
     try {
       const result = await this.firebase.firestore
         .collection(this.conversationCollection)
-        .where('roomId', '==', data.payload.roomId)
+        .where(
+          Filter.and(
+            Filter.where('roomId', '==', data.payload.roomId),
+            Filter.where('id', '==', data.payload.conversationId),
+          ),
+        )
         .get();
 
       if (!result.empty) {
