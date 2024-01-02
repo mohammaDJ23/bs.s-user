@@ -57,6 +57,13 @@ export class Conversation implements ConversationObj {
   ) {}
 }
 
+interface TypingTextObj {
+  roomId: string;
+  userId: number;
+}
+
+interface StopingTextObj extends TypingTextObj {}
+
 @WebSocketGateway({
   path: '/api/v1/user/socket/chat',
   cors: {
@@ -219,5 +226,20 @@ export class ChatGateWay {
         .to(client.id)
         .emit('fail-send-message', new InternalServerErrorException(error));
     }
+  }
+
+  @SubscribeMessage('make-rooms')
+  makeRooms(client: Socket, data: SocketPayloadType<string | string[]>) {
+    client.join(data.payload);
+  }
+
+  @SubscribeMessage('typing-text')
+  typingText(client: Socket, data: SocketPayloadType<TypingTextObj>) {
+    client.broadcast.to(data.payload.roomId).emit('typing-text', data.payload);
+  }
+
+  @SubscribeMessage('stoping-text')
+  stopingText(client: Socket, data: SocketPayloadType<StopingTextObj>) {
+    client.broadcast.to(data.payload.roomId).emit('stoping-text', data.payload);
   }
 }
