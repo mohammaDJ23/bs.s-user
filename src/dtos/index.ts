@@ -11,3 +11,6 @@ export * from './user.dto';
 export * from './accessToken.dto';
 export * from './userListFilters.dto';
 export * from './deletedUserListFilters.dto';
+export * from './startConversation.dto';
+export * from './sendMessage.dto';
+export * from './message.dto';

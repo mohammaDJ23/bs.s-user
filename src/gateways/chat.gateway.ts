@@ -22,19 +22,13 @@ import { EncryptedUserObj, SocketPayloadType } from 'src/types';
 import { User } from 'src/entities';
 import { UserService } from 'src/services';
 import { getConversationTargetId } from 'src/libs/conversationTargetId';
-import { UserDto } from 'src/dtos';
-import { StartConversationDto } from 'src/dtos/startConversation.dto';
-
-interface MessageObj {
-  id: string;
-  userId: number;
-  text: string;
-  isReaded: boolean;
-  status: 'pending' | 'success' | 'error';
-  createdAt: FieldValue;
-  updatedAt: FieldValue;
-  deletedAt: FieldValue | null;
-}
+import {
+  MessageObj,
+  MessageStatus,
+  SendMessageDto,
+  StartConversationDto,
+  UserDto,
+} from 'src/dtos';
 
 export interface ConversationDocObj {
   id: string;
@@ -54,12 +48,6 @@ export interface ConversationDocObj {
 export interface ConversationObj {
   user: User;
   conversation: ConversationDocObj;
-}
-
-interface SendMessageObj {
-  message: MessageObj;
-  roomId: string;
-  conversationId: string;
 }
 
 export class Conversation implements ConversationObj {
@@ -187,26 +175,30 @@ export class ChatGateWay {
     }
   }
 
+  @UsePipes(new ValidationPipe())
   @SubscribeMessage('send-message')
-  async sendMessage(client: Socket, data: SocketPayloadType<SendMessageObj>) {
+  async sendMessage(
+    @ConnectedSocket() client: Socket,
+    @MessageBody() data: SendMessageDto,
+  ) {
     try {
       const result = await this.firebase.firestore
         .collection(this.conversationCollection)
         .where(
           Filter.and(
-            Filter.where('roomId', '==', data.payload.roomId),
-            Filter.where('id', '==', data.payload.conversationId),
+            Filter.where('roomId', '==', data.roomId),
+            Filter.where('id', '==', data.conversationId),
           ),
         )
         .get();
 
       if (!result.empty) {
         const message: MessageObj = {
-          id: data.payload.message.id,
-          userId: data.payload.message.userId,
-          text: data.payload.message.text,
-          isReaded: data.payload.message.isReaded,
-          status: 'success',
+          id: data.message.id,
+          userId: data.message.userId,
+          text: data.message.text,
+          isReaded: data.message.isReaded,
+          status: MessageStatus.SUCCESS,
           createdAt: FieldValue.serverTimestamp(),
           updatedAt: FieldValue.serverTimestamp(),
           deletedAt: null,
@@ -237,9 +229,9 @@ export class ChatGateWay {
 
         await batch.commit();
 
-        data.payload.message.status = 'success';
+        data.message.status = MessageStatus.SUCCESS;
 
-        this.wss.emit(data.payload.roomId, data.payload);
+        this.wss.emit(data.roomId, data);
       } else {
         throw new Error('No document was found.');
       }
