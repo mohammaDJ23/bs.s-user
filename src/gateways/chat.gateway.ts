@@ -30,6 +30,8 @@ export interface ConversationDocObj {
   id: string;
   creatorId: number;
   targetId: number;
+  isCreatorTyping: boolean;
+  isTargetTyping: boolean;
   roomId: string;
   contributors: number[];
   lastMessage: MessageObj | null;
@@ -120,6 +122,8 @@ export class ChatGateWay {
           creatorId: client.user.id,
           targetId: data.payload.id,
           roomId: creatorRoomId,
+          isCreatorTyping: false,
+          isTargetTyping: false,
           contributors: [client.user.id],
           lastMessage: null,
           createdAt: FieldValue.serverTimestamp(),
