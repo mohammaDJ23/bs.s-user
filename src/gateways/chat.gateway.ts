@@ -1,10 +1,18 @@
 import {
+  ConnectedSocket,
+  MessageBody,
   SubscribeMessage,
   WebSocketGateway,
   WebSocketServer,
 } from '@nestjs/websockets';
-import { InternalServerErrorException, UseGuards } from '@nestjs/common';
+import {
+  InternalServerErrorException,
+  UseGuards,
+  UsePipes,
+  ValidationPipe,
+} from '@nestjs/common';
 import { Server } from 'socket.io';
+import { plainToClass } from 'class-transformer';
 import { v4 as uuid } from 'uuid';
 import { JwtSocketGuard } from 'src/guards';
 import { FirebaseAdmin, InjectFirebaseAdmin } from 'nestjs-firebase';
@@ -14,6 +22,8 @@ import { EncryptedUserObj, SocketPayloadType } from 'src/types';
 import { User } from 'src/entities';
 import { UserService } from 'src/services';
 import { getConversationTargetId } from 'src/libs/conversationTargetId';
+import { UserDto } from 'src/dtos';
+import { StartConversationDto } from 'src/dtos/startConversation.dto';
 
 interface MessageObj {
   id: string;
@@ -96,13 +106,17 @@ export class ChatGateWay {
     return `${target.id}.${creator.id}`;
   }
 
+  @UsePipes(new ValidationPipe())
   @SubscribeMessage('start-conversation')
-  async startConversation(client: Socket, data: SocketPayloadType<User>) {
+  async startConversation(
+    @ConnectedSocket() client: Socket,
+    @MessageBody() data: StartConversationDto,
+  ) {
     try {
-      await this.userService.findByIdOrFail(data.payload.id);
+      const user = await this.userService.findByIdOrFail(data.id);
 
-      const creatorRoomId = this.getCreatorRoomId(client.user, data.payload);
-      const targetRoomId = this.getTargetRoomId(data.payload, client.user);
+      const creatorRoomId = this.getCreatorRoomId(client.user, user);
+      const targetRoomId = this.getTargetRoomId(user, client.user);
 
       let conversationDocObj: ConversationDocObj;
 
@@ -120,7 +134,7 @@ export class ChatGateWay {
         const doc: ConversationDocObj = {
           id: uuid(),
           creatorId: client.user.id,
-          targetId: data.payload.id,
+          targetId: user.id,
           roomId: creatorRoomId,
           isCreatorTyping: false,
           isTargetTyping: false,
@@ -153,11 +167,15 @@ export class ChatGateWay {
         conversationDocObj = docData;
       }
 
+      const plainUser = plainToClass(UserDto, user, {
+        excludeExtraneousValues: true,
+      }) as unknown as User;
+
       this.wss
         .to(client.id)
         .emit(
           'success-start-conversation',
-          new Conversation(data.payload, conversationDocObj),
+          new Conversation(plainUser, conversationDocObj),
         );
     } catch (error) {
       this.wss
