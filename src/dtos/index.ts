@@ -14,3 +14,4 @@ export * from './deletedUserListFilters.dto';
 export * from './startConversation.dto';
 export * from './sendMessage.dto';
 export * from './message.dto';
+export * from './makeRoomIds.dto';

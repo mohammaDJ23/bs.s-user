@@ -23,6 +23,7 @@ import { User } from 'src/entities';
 import { UserService } from 'src/services';
 import { getConversationTargetId } from 'src/libs/conversationTargetId';
 import {
+  MakeRoomIdsDto,
   MessageObj,
   MessageStatus,
   SendMessageDto,
@@ -243,8 +244,11 @@ export class ChatGateWay {
   }
 
   @SubscribeMessage('make-rooms')
-  makeRooms(client: Socket, data: SocketPayloadType<string | string[]>) {
-    client.join(data.payload);
+  makeRooms(
+    @ConnectedSocket() client: Socket,
+    @MessageBody() data: MakeRoomIdsDto,
+  ) {
+    client.join(data.roomIds);
   }
 
   @SubscribeMessage('typing-text')
