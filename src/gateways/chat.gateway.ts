@@ -18,7 +18,7 @@ import { JwtSocketGuard } from 'src/guards';
 import { FirebaseAdmin, InjectFirebaseAdmin } from 'nestjs-firebase';
 import { FieldValue, Filter } from '@google-cloud/firestore';
 import { Socket } from 'src/adapters';
-import { EncryptedUserObj, SocketPayloadType } from 'src/types';
+import { EncryptedUserObj } from 'src/types';
 import { User } from 'src/entities';
 import { UserService } from 'src/services';
 import { getConversationTargetId } from 'src/libs/conversationTargetId';
@@ -28,6 +28,7 @@ import {
   MessageStatus,
   SendMessageDto,
   StartConversationDto,
+  TypingTextDto,
   UserDto,
 } from 'src/dtos';
 
@@ -57,13 +58,6 @@ export class Conversation implements ConversationObj {
     public readonly conversation: ConversationDocObj,
   ) {}
 }
-
-interface TypingTextObj {
-  roomId: string;
-  userId: number;
-}
-
-interface StopingTextObj extends TypingTextObj {}
 
 @WebSocketGateway({
   path: '/api/v1/user/socket/chat',
@@ -252,13 +246,21 @@ export class ChatGateWay {
     client.join(data.roomIds);
   }
 
+  @UsePipes(new ValidationPipe())
   @SubscribeMessage('typing-text')
-  typingText(client: Socket, data: SocketPayloadType<TypingTextObj>) {
-    client.broadcast.to(data.payload.roomId).emit('typing-text', data.payload);
+  typingText(
+    @ConnectedSocket() client: Socket,
+    @MessageBody() data: TypingTextDto,
+  ) {
+    client.broadcast.to(data.roomId).emit('typing-text', data);
   }
 
+  @UsePipes(new ValidationPipe())
   @SubscribeMessage('stoping-text')
-  stopingText(client: Socket, data: SocketPayloadType<StopingTextObj>) {
-    client.broadcast.to(data.payload.roomId).emit('stoping-text', data.payload);
+  stopingText(
+    @ConnectedSocket() client: Socket,
+    @MessageBody() data: TypingTextDto,
+  ) {
+    client.broadcast.to(data.roomId).emit('stoping-text', data);
   }
 }

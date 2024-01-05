@@ -15,3 +15,5 @@ export * from './startConversation.dto';
 export * from './sendMessage.dto';
 export * from './message.dto';
 export * from './makeRoomIds.dto';
+export * from './typingText.dto';
+export * from './stopingText.dto';
