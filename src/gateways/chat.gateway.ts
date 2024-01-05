@@ -243,6 +243,7 @@ export class ChatGateWay {
     }
   }
 
+  @UsePipes(new ValidationPipe())
   @SubscribeMessage('make-rooms')
   makeRooms(
     @ConnectedSocket() client: Socket,
