@@ -18,13 +18,8 @@ import { Server } from 'socket.io';
 import { JwtSocketGuard } from 'src/guards';
 import { Socket } from 'src/adapters';
 import { Cache } from 'cache-manager';
-import {
-  CacheKeys,
-  EncryptedUserObj,
-  SocketPayloadType,
-  UserRoles,
-} from 'src/types';
-import { InitialUserStatusDto, UsersStatusDto } from 'src/dtos';
+import { CacheKeys, EncryptedUserObj, UserRoles } from 'src/types';
+import { InitialUserStatusDto, LogoutUserDto, UsersStatusDto } from 'src/dtos';
 
 type UserStatusType = Socket['user'] & {
   lastConnection?: string | null;
@@ -148,13 +143,17 @@ export class UserConnectionGateWay
     }
   }
 
+  @UsePipes(new ValidationPipe())
   @SubscribeMessage('logout-user')
-  async logoutUser(client: Socket, data: SocketPayloadType<number>) {
+  async logoutUser(
+    @ConnectedSocket() client: Socket,
+    @MessageBody() data: LogoutUserDto,
+  ) {
     if (client.user.role === UserRoles.OWNER) {
       const userStatus: UserStatusType | undefined = await this.getUserStatus(
-        data.payload,
+        data.id,
       );
-      if (userStatus) {
+      if (userStatus && userStatus.lastConnection === null) {
         this.wss.emit(
           'logout-user',
           this.convertUserStatusToUsersStatus(userStatus),
