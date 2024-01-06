@@ -4,6 +4,7 @@ import {
   OnGatewayConnection,
   OnGatewayDisconnect,
   SubscribeMessage,
+  ConnectedSocket,
 } from '@nestjs/websockets';
 import { CACHE_MANAGER, Inject, UseGuards } from '@nestjs/common';
 import { Server } from 'socket.io';
@@ -70,7 +71,7 @@ export class UserConnectionGateWay
     this.wss.emit('user-status', user);
   }
 
-  async handleConnection(client: Socket) {
+  async handleConnection(@ConnectedSocket() client: Socket) {
     let userStatus = await this.getUserStatus(client.user.id);
 
     userStatus = Object.assign<EncryptedUserObj, Partial<UserStatusType>>(
@@ -83,7 +84,7 @@ export class UserConnectionGateWay
     this.emitUserStatusToAll(this.convertUserStatusToUsersStatus(userStatus));
   }
 
-  async handleDisconnect(client: Socket) {
+  async handleDisconnect(@ConnectedSocket() client: Socket) {
     let userStatus = await this.getUserStatus(client.user.id);
 
     userStatus = Object.assign<EncryptedUserObj, Partial<UserStatusType>>(
