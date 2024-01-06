@@ -18,3 +18,4 @@ export * from './makeRoomIds.dto';
 export * from './typingText.dto';
 export * from './stopingText.dto';
 export * from './initialUserStatus.dto';
+export * from './usersStatus.dto';

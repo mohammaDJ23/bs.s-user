@@ -24,7 +24,7 @@ import {
   SocketPayloadType,
   UserRoles,
 } from 'src/types';
-import { InitialUserStatusDto } from 'src/dtos';
+import { InitialUserStatusDto, UsersStatusDto } from 'src/dtos';
 
 type UserStatusType = Socket['user'] & {
   lastConnection?: string | null;
@@ -126,15 +126,15 @@ export class UserConnectionGateWay
     }
   }
 
+  @UsePipes(new ValidationPipe())
   @SubscribeMessage('users-status')
-  async usersStatus(client: Socket, data: SocketPayloadType<number[]>) {
-    if (
-      client.user.role === UserRoles.OWNER &&
-      Array.isArray(data.payload) &&
-      data.payload.every((id) => !!Number(id))
-    ) {
+  async usersStatus(
+    @ConnectedSocket() client: Socket,
+    @MessageBody() data: UsersStatusDto,
+  ) {
+    if (client.user.role === UserRoles.OWNER) {
       const cachedUsersStatus = await Promise.all(
-        data.payload.map((id) => this.getUserStatus(id)),
+        data.ids.map((id) => this.getUserStatus(id)),
       );
       const usersStatus = cachedUsersStatus
         .filter(
