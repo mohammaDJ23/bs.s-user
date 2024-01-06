@@ -5,8 +5,15 @@ import {
   OnGatewayDisconnect,
   SubscribeMessage,
   ConnectedSocket,
+  MessageBody,
 } from '@nestjs/websockets';
-import { CACHE_MANAGER, Inject, UseGuards } from '@nestjs/common';
+import {
+  CACHE_MANAGER,
+  Inject,
+  UseGuards,
+  UsePipes,
+  ValidationPipe,
+} from '@nestjs/common';
 import { Server } from 'socket.io';
 import { JwtSocketGuard } from 'src/guards';
 import { Socket } from 'src/adapters';
@@ -17,6 +24,7 @@ import {
   SocketPayloadType,
   UserRoles,
 } from 'src/types';
+import { InitialUserStatusDto } from 'src/dtos';
 
 type UserStatusType = Socket['user'] & {
   lastConnection?: string | null;
@@ -97,11 +105,15 @@ export class UserConnectionGateWay
     this.emitUserStatusToAll(this.convertUserStatusToUsersStatus(userStatus));
   }
 
+  @UsePipes(new ValidationPipe())
   @SubscribeMessage('initial-user-status')
-  async initialUserStatus(client: Socket, data: SocketPayloadType<number>) {
-    if (client.user.role === UserRoles.OWNER && !!Number(data.payload)) {
+  async initialUserStatus(
+    @ConnectedSocket() client: Socket,
+    @MessageBody() data: InitialUserStatusDto,
+  ) {
+    if (client.user.role === UserRoles.OWNER) {
       const findedUserStatus: UserStatusType | undefined =
-        await this.getUserStatus(data.payload);
+        await this.getUserStatus(data.id);
 
       let userStatus: UsersStatusType | object;
       if (!findedUserStatus) {
