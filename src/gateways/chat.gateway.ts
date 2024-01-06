@@ -1,33 +1,43 @@
 import {
+  ConnectedSocket,
+  MessageBody,
   SubscribeMessage,
   WebSocketGateway,
   WebSocketServer,
 } from '@nestjs/websockets';
-import { InternalServerErrorException, UseGuards } from '@nestjs/common';
+import {
+  InternalServerErrorException,
+  UseGuards,
+  UsePipes,
+  ValidationPipe,
+} from '@nestjs/common';
 import { Server } from 'socket.io';
+import { plainToClass } from 'class-transformer';
 import { v4 as uuid } from 'uuid';
 import { JwtSocketGuard } from 'src/guards';
 import { FirebaseAdmin, InjectFirebaseAdmin } from 'nestjs-firebase';
 import { FieldValue, Filter } from '@google-cloud/firestore';
 import { Socket } from 'src/adapters';
-import { EncryptedUserObj, SocketPayloadType } from 'src/types';
+import { EncryptedUserObj } from 'src/types';
 import { User } from 'src/entities';
 import { UserService } from 'src/services';
+import { getConversationTargetId } from 'src/libs/conversationTargetId';
+import {
+  MakeRoomIdsDto,
+  MessageObj,
+  MessageStatus,
+  SendMessageDto,
+  StartConversationDto,
+  TypingTextDto,
+  UserDto,
+} from 'src/dtos';
 
-interface MessageObj {
-  userId: number;
-  id: string;
-  text: string;
-  createdAt: FieldValue;
-  updatedAt: FieldValue;
-  deletedAt: FieldValue | null;
-  isReaded: boolean;
-}
-
-interface ConversationDocObj {
+export interface ConversationDocObj {
   id: string;
   creatorId: number;
   targetId: number;
+  isCreatorTyping: boolean;
+  isTargetTyping: boolean;
   roomId: string;
   contributors: number[];
   lastMessage: MessageObj | null;
@@ -40,10 +50,6 @@ interface ConversationDocObj {
 export interface ConversationObj {
   user: User;
   conversation: ConversationDocObj;
-}
-
-interface SendMessageObj extends ConversationObj {
-  text: string;
 }
 
 export class Conversation implements ConversationObj {
@@ -67,7 +73,7 @@ export class Conversation implements ConversationObj {
 export class ChatGateWay {
   @WebSocketServer()
   private wss: Server;
-  private coversationCollection: string =
+  private conversationCollection: string =
     process.env.FIREBASE_CONVERSATION_COLLECTION!;
 
   constructor(
@@ -83,18 +89,22 @@ export class ChatGateWay {
     return `${target.id}.${creator.id}`;
   }
 
+  @UsePipes(new ValidationPipe())
   @SubscribeMessage('start-conversation')
-  async startConversation(client: Socket, data: SocketPayloadType<User>) {
+  async startConversation(
+    @ConnectedSocket() client: Socket,
+    @MessageBody() data: StartConversationDto,
+  ) {
     try {
-      await this.userService.findByIdOrFail(data.payload.id);
+      const user = await this.userService.findByIdOrFail(data.id);
 
-      const creatorRoomId = this.getCreatorRoomId(client.user, data.payload);
-      const targetRoomId = this.getTargetRoomId(data.payload, client.user);
+      const creatorRoomId = this.getCreatorRoomId(client.user, user);
+      const targetRoomId = this.getTargetRoomId(user, client.user);
 
       let conversationDocObj: ConversationDocObj;
 
       const result = await this.firebase.firestore
-        .collection(this.coversationCollection)
+        .collection(this.conversationCollection)
         .where(
           Filter.or(
             Filter.where('roomId', '==', creatorRoomId),
@@ -107,8 +117,10 @@ export class ChatGateWay {
         const doc: ConversationDocObj = {
           id: uuid(),
           creatorId: client.user.id,
-          targetId: data.payload.id,
+          targetId: user.id,
           roomId: creatorRoomId,
+          isCreatorTyping: false,
+          isTargetTyping: false,
           contributors: [client.user.id],
           lastMessage: null,
           createdAt: FieldValue.serverTimestamp(),
@@ -118,7 +130,7 @@ export class ChatGateWay {
         };
 
         await this.firebase.firestore
-          .collection(this.coversationCollection)
+          .collection(this.conversationCollection)
           .doc(creatorRoomId)
           .set(doc);
 
@@ -128,7 +140,7 @@ export class ChatGateWay {
         const docData = doc.data() as ConversationDocObj;
 
         await this.firebase.firestore
-          .collection(this.coversationCollection)
+          .collection(this.conversationCollection)
           .doc(docData.roomId)
           .update({
             contributors: FieldValue.arrayUnion(client.user.id),
@@ -138,11 +150,15 @@ export class ChatGateWay {
         conversationDocObj = docData;
       }
 
+      const plainUser = plainToClass(UserDto, user, {
+        excludeExtraneousValues: true,
+      }) as unknown as User;
+
       this.wss
         .to(client.id)
         .emit(
           'success-start-conversation',
-          new Conversation(data.payload, conversationDocObj),
+          new Conversation(plainUser, conversationDocObj),
         );
     } catch (error) {
       this.wss
@@ -154,31 +170,30 @@ export class ChatGateWay {
     }
   }
 
+  @UsePipes(new ValidationPipe())
   @SubscribeMessage('send-message')
-  async sendMessage(client: Socket, data: SocketPayloadType<SendMessageObj>) {
+  async sendMessage(
+    @ConnectedSocket() client: Socket,
+    @MessageBody() data: SendMessageDto,
+  ) {
     try {
-      const creatorRoomId = this.getCreatorRoomId(
-        client.user,
-        data.payload.user,
-      );
-      const targetRoomId = this.getTargetRoomId(data.payload.user, client.user);
-
       const result = await this.firebase.firestore
-        .collection(this.coversationCollection)
+        .collection(this.conversationCollection)
         .where(
-          Filter.or(
-            Filter.where('roomId', '==', creatorRoomId),
-            Filter.where('roomId', '==', targetRoomId),
+          Filter.and(
+            Filter.where('roomId', '==', data.roomId),
+            Filter.where('id', '==', data.conversationId),
           ),
         )
         .get();
 
       if (!result.empty) {
         const message: MessageObj = {
-          id: uuid(),
-          userId: client.user.id,
-          text: data.payload.text,
-          isReaded: false,
+          id: data.message.id,
+          userId: data.message.userId,
+          text: data.message.text,
+          isReaded: data.message.isReaded,
+          status: MessageStatus.SUCCESS,
           createdAt: FieldValue.serverTimestamp(),
           updatedAt: FieldValue.serverTimestamp(),
           deletedAt: null,
@@ -188,7 +203,7 @@ export class ChatGateWay {
         const conversationDocData = doc.data() as ConversationDocObj;
 
         const conversationDocRef = this.firebase.firestore
-          .collection(this.coversationCollection)
+          .collection(this.conversationCollection)
           .doc(conversationDocData.roomId);
 
         const messageDocRef = conversationDocRef
@@ -198,7 +213,9 @@ export class ChatGateWay {
         const batch = this.firebase.firestore.batch();
 
         batch.update(conversationDocRef, {
-          contributors: FieldValue.arrayUnion(data.payload.user.id),
+          contributors: FieldValue.arrayUnion(
+            getConversationTargetId(client.user, conversationDocData),
+          ),
           lastMessage: message,
           updatedAt: FieldValue.serverTimestamp(),
         });
@@ -207,7 +224,9 @@ export class ChatGateWay {
 
         await batch.commit();
 
-        this.wss.to(client.id).emit('success-send-message', data.payload);
+        data.message.status = MessageStatus.SUCCESS;
+
+        this.wss.emit(data.roomId, data);
       } else {
         throw new Error('No document was found.');
       }
@@ -216,5 +235,32 @@ export class ChatGateWay {
         .to(client.id)
         .emit('fail-send-message', new InternalServerErrorException(error));
     }
+  }
+
+  @UsePipes(new ValidationPipe())
+  @SubscribeMessage('make-rooms')
+  makeRooms(
+    @ConnectedSocket() client: Socket,
+    @MessageBody() data: MakeRoomIdsDto,
+  ) {
+    client.join(data.roomIds);
+  }
+
+  @UsePipes(new ValidationPipe())
+  @SubscribeMessage('typing-text')
+  typingText(
+    @ConnectedSocket() client: Socket,
+    @MessageBody() data: TypingTextDto,
+  ) {
+    client.broadcast.to(data.roomId).emit('typing-text', data);
+  }
+
+  @UsePipes(new ValidationPipe())
+  @SubscribeMessage('stoping-text')
+  stopingText(
+    @ConnectedSocket() client: Socket,
+    @MessageBody() data: TypingTextDto,
+  ) {
+    client.broadcast.to(data.roomId).emit('stoping-text', data);
   }
 }

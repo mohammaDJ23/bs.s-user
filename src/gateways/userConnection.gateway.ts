@@ -4,18 +4,22 @@ import {
   OnGatewayConnection,
   OnGatewayDisconnect,
   SubscribeMessage,
+  ConnectedSocket,
+  MessageBody,
 } from '@nestjs/websockets';
-import { CACHE_MANAGER, Inject, UseGuards } from '@nestjs/common';
+import {
+  CACHE_MANAGER,
+  Inject,
+  UseGuards,
+  UsePipes,
+  ValidationPipe,
+} from '@nestjs/common';
 import { Server } from 'socket.io';
 import { JwtSocketGuard } from 'src/guards';
 import { Socket } from 'src/adapters';
 import { Cache } from 'cache-manager';
-import {
-  CacheKeys,
-  EncryptedUserObj,
-  SocketPayloadType,
-  UserRoles,
-} from 'src/types';
+import { CacheKeys, EncryptedUserObj, UserRoles } from 'src/types';
+import { InitialUserStatusDto, LogoutUserDto, UsersStatusDto } from 'src/dtos';
 
 type UserStatusType = Socket['user'] & {
   lastConnection?: string | null;
@@ -70,7 +74,7 @@ export class UserConnectionGateWay
     this.wss.emit('user-status', user);
   }
 
-  async handleConnection(client: Socket) {
+  async handleConnection(@ConnectedSocket() client: Socket) {
     let userStatus = await this.getUserStatus(client.user.id);
 
     userStatus = Object.assign<EncryptedUserObj, Partial<UserStatusType>>(
@@ -83,7 +87,7 @@ export class UserConnectionGateWay
     this.emitUserStatusToAll(this.convertUserStatusToUsersStatus(userStatus));
   }
 
-  async handleDisconnect(client: Socket) {
+  async handleDisconnect(@ConnectedSocket() client: Socket) {
     let userStatus = await this.getUserStatus(client.user.id);
 
     userStatus = Object.assign<EncryptedUserObj, Partial<UserStatusType>>(
@@ -96,11 +100,15 @@ export class UserConnectionGateWay
     this.emitUserStatusToAll(this.convertUserStatusToUsersStatus(userStatus));
   }
 
+  @UsePipes(new ValidationPipe())
   @SubscribeMessage('initial-user-status')
-  async initialUserStatus(client: Socket, data: SocketPayloadType<number>) {
-    if (client.user.role === UserRoles.OWNER && !!Number(data.payload)) {
+  async initialUserStatus(
+    @ConnectedSocket() client: Socket,
+    @MessageBody() data: InitialUserStatusDto,
+  ) {
+    if (client.user.role === UserRoles.OWNER) {
       const findedUserStatus: UserStatusType | undefined =
-        await this.getUserStatus(data.payload);
+        await this.getUserStatus(data.id);
 
       let userStatus: UsersStatusType | object;
       if (!findedUserStatus) {
@@ -113,15 +121,15 @@ export class UserConnectionGateWay
     }
   }
 
+  @UsePipes(new ValidationPipe())
   @SubscribeMessage('users-status')
-  async usersStatus(client: Socket, data: SocketPayloadType<number[]>) {
-    if (
-      client.user.role === UserRoles.OWNER &&
-      Array.isArray(data.payload) &&
-      data.payload.every((id) => !!Number(id))
-    ) {
+  async usersStatus(
+    @ConnectedSocket() client: Socket,
+    @MessageBody() data: UsersStatusDto,
+  ) {
+    if (client.user.role === UserRoles.OWNER) {
       const cachedUsersStatus = await Promise.all(
-        data.payload.map((id) => this.getUserStatus(id)),
+        data.ids.map((id) => this.getUserStatus(id)),
       );
       const usersStatus = cachedUsersStatus
         .filter(
@@ -135,13 +143,17 @@ export class UserConnectionGateWay
     }
   }
 
+  @UsePipes(new ValidationPipe())
   @SubscribeMessage('logout-user')
-  async logoutUser(client: Socket, data: SocketPayloadType<number>) {
+  async logoutUser(
+    @ConnectedSocket() client: Socket,
+    @MessageBody() data: LogoutUserDto,
+  ) {
     if (client.user.role === UserRoles.OWNER) {
       const userStatus: UserStatusType | undefined = await this.getUserStatus(
-        data.payload,
+        data.id,
       );
-      if (userStatus) {
+      if (userStatus && userStatus.lastConnection === null) {
         this.wss.emit(
           'logout-user',
           this.convertUserStatusToUsersStatus(userStatus),
