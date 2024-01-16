@@ -18,8 +18,9 @@ import { Server } from 'socket.io';
 import { JwtSocketGuard } from 'src/guards';
 import { Socket } from 'src/adapters';
 import { Cache } from 'cache-manager';
-import { CacheKeys, EncryptedUserObj, UserRoles } from 'src/types';
+import { CacheKeys, UserRoles } from 'src/types';
 import { InitialUserStatusDto, LogoutUserDto, UsersStatusDto } from 'src/dtos';
+import { User } from 'src/entities';
 
 type UserStatusType = Socket['user'] & {
   lastConnection?: string | null;
@@ -77,10 +78,9 @@ export class UserConnectionGateWay
   async handleConnection(@ConnectedSocket() client: Socket) {
     let userStatus = await this.getUserStatus(client.user.id);
 
-    userStatus = Object.assign<EncryptedUserObj, Partial<UserStatusType>>(
-      client.user,
-      { lastConnection: null },
-    );
+    userStatus = Object.assign<User, Partial<UserStatusType>>(client.user, {
+      lastConnection: null,
+    });
 
     await this.setUserStatus(userStatus);
 
@@ -90,10 +90,9 @@ export class UserConnectionGateWay
   async handleDisconnect(@ConnectedSocket() client: Socket) {
     let userStatus = await this.getUserStatus(client.user.id);
 
-    userStatus = Object.assign<EncryptedUserObj, Partial<UserStatusType>>(
-      client.user,
-      { lastConnection: new Date().toISOString() },
-    );
+    userStatus = Object.assign<User, Partial<UserStatusType>>(client.user, {
+      lastConnection: new Date().toISOString(),
+    });
 
     await this.setUserStatus(userStatus);
 
