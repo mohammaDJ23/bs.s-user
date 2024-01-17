@@ -18,7 +18,6 @@ import { JwtSocketGuard } from 'src/guards';
 import { FirebaseAdmin, InjectFirebaseAdmin } from 'nestjs-firebase';
 import { FieldValue, Filter } from '@google-cloud/firestore';
 import { Socket } from 'src/adapters';
-import { EncryptedUserObj } from 'src/types';
 import { User } from 'src/entities';
 import { UserService } from 'src/services';
 import { getConversationTargetId } from 'src/libs/conversationTargetId';
@@ -262,22 +261,5 @@ export class ChatGateWay {
     @MessageBody() data: TypingTextDto,
   ) {
     client.broadcast.to(data.roomId).emit('stoping-text', data);
-  }
-
-  @SubscribeMessage('generate-custom-token')
-  async firebaseLogin(@ConnectedSocket() client: Socket) {
-    try {
-      const token = await this.firebase.auth.createCustomToken(
-        client.user.id.toString(),
-      );
-      this.wss.to(client.id).emit('generate-custom-token', { token });
-    } catch (error) {
-      this.wss
-        .to(client.id)
-        .emit(
-          'fail-generate-custom-token',
-          new InternalServerErrorException('Could not generate a custom token'),
-        );
-    }
   }
 }
