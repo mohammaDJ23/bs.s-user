@@ -81,11 +81,11 @@ export class ChatGateWay {
     private readonly userService: UserService,
   ) {}
 
-  getCreatorRoomId(creator: EncryptedUserObj, target: User) {
+  getCreatorRoomId(creator: User, target: User) {
     return `${creator.id}.${target.id}`;
   }
 
-  getTargetRoomId(target: User, creator: EncryptedUserObj) {
+  getTargetRoomId(target: User, creator: User) {
     return `${target.id}.${creator.id}`;
   }
 
@@ -262,5 +262,22 @@ export class ChatGateWay {
     @MessageBody() data: TypingTextDto,
   ) {
     client.broadcast.to(data.roomId).emit('stoping-text', data);
+  }
+
+  @SubscribeMessage('generate-custom-token')
+  async firebaseLogin(@ConnectedSocket() client: Socket) {
+    try {
+      const token = await this.firebase.auth.createCustomToken(
+        client.user.id.toString(),
+      );
+      this.wss.to(client.id).emit('generate-custom-token', { token });
+    } catch (error) {
+      this.wss
+        .to(client.id)
+        .emit(
+          'fail-generate-custom-token',
+          new InternalServerErrorException('Could not generate a custom token'),
+        );
+    }
   }
 }
