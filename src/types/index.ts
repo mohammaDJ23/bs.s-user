@@ -1,6 +1,7 @@
 import { Request as Req } from 'express';
 import { User } from 'src/entities';
 import { RequestOptions } from 'web-push';
+import { Socket as Sckt } from 'socket.io';
 
 export interface CurrentUserObj {
   currentUser: User;
@@ -97,4 +98,8 @@ export interface NotificationObj extends UserObj {
   };
 }
 
-export type SocketPayloadType<T> = Record<'payload', T>;
+interface FirebaseUserObj {
+  firebaseUser: User;
+}
+
+export interface Socket extends Sckt, UserObj, FirebaseUserObj {}

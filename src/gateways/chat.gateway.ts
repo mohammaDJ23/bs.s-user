@@ -5,19 +5,13 @@ import {
   WebSocketGateway,
   WebSocketServer,
 } from '@nestjs/websockets';
-import {
-  InternalServerErrorException,
-  UseGuards,
-  UsePipes,
-  ValidationPipe,
-} from '@nestjs/common';
+import { UseFilters, UseGuards, UsePipes } from '@nestjs/common';
 import { Server } from 'socket.io';
 import { plainToClass } from 'class-transformer';
 import { v4 as uuid } from 'uuid';
-import { JwtSocketGuard } from 'src/guards';
+import { FirebaseIdTokenGuard, JwtSocketGuard } from 'src/guards';
 import { FirebaseAdmin, InjectFirebaseAdmin } from 'nestjs-firebase';
 import { FieldValue, Filter } from '@google-cloud/firestore';
-import { Socket } from 'src/adapters';
 import { User } from 'src/entities';
 import { UserService } from 'src/services';
 import { getConversationTargetId } from 'src/libs/conversationTargetId';
@@ -30,6 +24,10 @@ import {
   TypingTextDto,
   UserDto,
 } from 'src/dtos';
+import { WsFilter } from 'src/filters';
+import { WsException } from 'src/exceptions';
+import { WsValidationPipe } from 'src/pipes';
+import { Socket } from 'src/types';
 
 export interface ConversationDocObj {
   id: string;
@@ -68,7 +66,6 @@ export class Conversation implements ConversationObj {
     ],
   },
 })
-@UseGuards(JwtSocketGuard)
 export class ChatGateWay {
   @WebSocketServer()
   private wss: Server;
@@ -88,7 +85,9 @@ export class ChatGateWay {
     return `${target.id}.${creator.id}`;
   }
 
-  @UsePipes(new ValidationPipe())
+  @UsePipes(new WsValidationPipe('start-conversation'))
+  @UseFilters(WsFilter)
+  @UseGuards(JwtSocketGuard, FirebaseIdTokenGuard)
   @SubscribeMessage('start-conversation')
   async startConversation(
     @ConnectedSocket() client: Socket,
@@ -153,23 +152,18 @@ export class ChatGateWay {
         excludeExtraneousValues: true,
       }) as unknown as User;
 
-      this.wss
-        .to(client.id)
-        .emit(
-          'success-start-conversation',
-          new Conversation(plainUser, conversationDocObj),
-        );
+      client.emit(
+        'start-conversation',
+        new Conversation(plainUser, conversationDocObj),
+      );
     } catch (error) {
-      this.wss
-        .to(client.id)
-        .emit(
-          'fail-start-conversation',
-          new InternalServerErrorException(error),
-        );
+      throw new WsException('start-conversation', error.message);
     }
   }
 
-  @UsePipes(new ValidationPipe())
+  @UsePipes(new WsValidationPipe('send-message'))
+  @UseFilters(WsFilter)
+  @UseGuards(JwtSocketGuard, FirebaseIdTokenGuard)
   @SubscribeMessage('send-message')
   async sendMessage(
     @ConnectedSocket() client: Socket,
@@ -230,13 +224,13 @@ export class ChatGateWay {
         throw new Error('No document was found.');
       }
     } catch (error) {
-      this.wss
-        .to(client.id)
-        .emit('fail-send-message', new InternalServerErrorException(error));
+      throw new WsException('send-message', error.message);
     }
   }
 
-  @UsePipes(new ValidationPipe())
+  @UsePipes(new WsValidationPipe('make-rooms'))
+  @UseFilters(WsFilter)
+  @UseGuards(JwtSocketGuard, FirebaseIdTokenGuard)
   @SubscribeMessage('make-rooms')
   makeRooms(
     @ConnectedSocket() client: Socket,
@@ -245,7 +239,7 @@ export class ChatGateWay {
     client.join(data.roomIds);
   }
 
-  @UsePipes(new ValidationPipe())
+  @UsePipes(new WsValidationPipe('typing-text'))
   @SubscribeMessage('typing-text')
   typingText(
     @ConnectedSocket() client: Socket,
@@ -254,7 +248,7 @@ export class ChatGateWay {
     client.broadcast.to(data.roomId).emit('typing-text', data);
   }
 
-  @UsePipes(new ValidationPipe())
+  @UsePipes(new WsValidationPipe('stoping-text'))
   @SubscribeMessage('stoping-text')
   stopingText(
     @ConnectedSocket() client: Socket,

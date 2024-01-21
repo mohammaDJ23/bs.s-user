@@ -1,14 +1,14 @@
 import { Injectable, CanActivate, ExecutionContext } from '@nestjs/common';
-import { JwtService } from '@nestjs/jwt';
+import { FirebaseAdmin, InjectFirebaseAdmin } from 'nestjs-firebase';
 import { Observable } from 'rxjs';
 import { WsException } from 'src/exceptions';
 import { UserService } from 'src/services';
 import { Socket } from 'src/types';
 
 @Injectable()
-export class JwtSocketGuard implements CanActivate {
+export class FirebaseIdTokenGuard implements CanActivate {
   constructor(
-    private readonly jwtService: JwtService,
+    @InjectFirebaseAdmin() private readonly firebase: FirebaseAdmin,
     private readonly userService: UserService,
   ) {}
 
@@ -17,20 +17,20 @@ export class JwtSocketGuard implements CanActivate {
   ): boolean | Promise<boolean> | Observable<boolean> {
     const webSocket = context.switchToWs();
     const socket = webSocket.getClient<Socket>();
-    const bearerToken = socket.handshake.headers.authorization;
+    const bearerToken = socket.handshake.headers.fbitauthorization as string;
     const error = new WsException('authentication', 'Unauthorized');
 
-    if (bearerToken) {
+    if (bearerToken && typeof bearerToken === 'string') {
       const [_, token] = bearerToken.split(' ');
-      return this.jwtService
-        .verifyAsync(token)
-        .then((user) => this.userService.findByIdOrFail(user.id))
+      return this.firebase.auth
+        .verifyIdToken(token)
+        .then((user) => this.userService.findById(+user.uid))
         .then((user) => {
           if (!user) {
             throw error;
           }
 
-          socket.user = user;
+          socket.firebaseUser = user;
           return true;
         })
         .catch((reason) => {
