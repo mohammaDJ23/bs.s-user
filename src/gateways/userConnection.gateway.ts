@@ -103,12 +103,19 @@ export class UserConnectionGateWay
 
   async handleDisconnect(@ConnectedSocket() client: Socket) {
     try {
-      let userStatus = await this.getUserStatus(client.user.id);
-      userStatus = Object.assign<User, Partial<UserStatusType>>(client.user, {
-        lastConnection: new Date().toISOString(),
-      });
-      await this.setUserStatus(userStatus);
-      this.emitUserStatusToAll(this.convertUserStatusToUsersStatus(userStatus));
+      const user = await this.jwtService.verify(client);
+      if (!user) {
+        client.disconnect();
+      } else {
+        let userStatus = await this.getUserStatus(user.id);
+        userStatus = Object.assign<User, Partial<UserStatusType>>(user, {
+          lastConnection: new Date().toISOString(),
+        });
+        await this.setUserStatus(userStatus);
+        this.emitUserStatusToAll(
+          this.convertUserStatusToUsersStatus(userStatus),
+        );
+      }
     } catch (error) {}
   }
 
