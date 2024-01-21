@@ -38,6 +38,7 @@ type UsersStatusType = Record<number, UserStatusType>;
       process.env.CLIENT_CONTAINER_URL,
       process.env.CLIENT_AUTH_URL,
       process.env.CLIENT_BANK_URL,
+      process.env.CLIENT_CHAT_URL,
     ],
   },
 })
