@@ -85,7 +85,9 @@ export class ChatGateWay implements OnGatewayConnection {
       if (!user) {
         client.disconnect();
       }
-    } catch (error) {}
+    } catch (error) {
+      client.disconnect();
+    }
   }
 
   getCreatorRoomId(creator: User, target: User) {

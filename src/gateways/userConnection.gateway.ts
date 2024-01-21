@@ -96,7 +96,9 @@ export class UserConnectionGateWay
           this.convertUserStatusToUsersStatus(userStatus),
         );
       }
-    } catch (error) {}
+    } catch (error) {
+      client.disconnect();
+    }
   }
 
   async handleDisconnect(@ConnectedSocket() client: Socket) {
