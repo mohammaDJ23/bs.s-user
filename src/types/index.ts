@@ -2,6 +2,7 @@ import { Request as Req } from 'express';
 import { User } from 'src/entities';
 import { RequestOptions } from 'web-push';
 import { Socket as Sckt } from 'socket.io';
+import { IncomingMessage as IncMessage } from 'http';
 
 export interface CurrentUserObj {
   currentUser: User;
@@ -103,3 +104,7 @@ interface FirebaseUserObj {
 }
 
 export interface Socket extends Sckt, UserObj, FirebaseUserObj {}
+
+export interface IncommingMessage extends IncMessage {
+  user: User;
+}

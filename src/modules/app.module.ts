@@ -2,7 +2,7 @@ import { CacheModule, Module, ValidationPipe } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { ClientsModule, Transport } from '@nestjs/microservices';
 import { TypeOrmModule } from '@nestjs/typeorm';
-import { UserService, RabbitmqService } from '../services';
+import { UserService, RabbitmqService, JwtService } from '../services';
 import { User } from '../entities';
 import { CustomNamingStrategy, JwtStrategy } from '../strategies';
 import { AllExceptionFilter } from '../filters';
@@ -101,6 +101,7 @@ import { join } from 'path';
   controllers: [userController, UserMessagePatternController],
   providers: [
     UserService,
+    JwtService,
     JwtStrategy,
     RabbitmqService,
     RestoreUserTransaction,

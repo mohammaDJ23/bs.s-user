@@ -23,6 +23,7 @@ import { User } from 'src/entities';
 import { WsValidationPipe } from 'src/pipes/ws.pipe';
 import { WsFilter } from 'src/filters';
 import { WsException } from 'src/exceptions';
+import { JwtService } from 'src/services';
 
 type UserStatusType = Socket['user'] & {
   lastConnection?: string | null;
@@ -47,7 +48,10 @@ export class UserConnectionGateWay
   @WebSocketServer()
   private wss: Server;
 
-  constructor(@Inject(CACHE_MANAGER) private readonly cacheService: Cache) {}
+  constructor(
+    @Inject(CACHE_MANAGER) private readonly cacheService: Cache,
+    private readonly jwtService: JwtService,
+  ) {}
 
   getCacheKey(id: number) {
     return `${CacheKeys.USERS_STATUS}.${process.env.PORT}.${id}`;
@@ -78,21 +82,32 @@ export class UserConnectionGateWay
   }
 
   async handleConnection(@ConnectedSocket() client: Socket) {
-    // let userStatus = await this.getUserStatus(client.user.id);
-    // userStatus = Object.assign<User, Partial<UserStatusType>>(client.user, {
-    //   lastConnection: null,
-    // });
-    // await this.setUserStatus(userStatus);
-    // this.emitUserStatusToAll(this.convertUserStatusToUsersStatus(userStatus));
+    try {
+      const user = await this.jwtService.verify(client);
+      if (!user) {
+        client.disconnect();
+      } else {
+        let userStatus = await this.getUserStatus(user.id);
+        userStatus = Object.assign<User, Partial<UserStatusType>>(user, {
+          lastConnection: null,
+        });
+        await this.setUserStatus(userStatus);
+        this.emitUserStatusToAll(
+          this.convertUserStatusToUsersStatus(userStatus),
+        );
+      }
+    } catch (error) {}
   }
 
   async handleDisconnect(@ConnectedSocket() client: Socket) {
-    // let userStatus = await this.getUserStatus(client.user.id);
-    // userStatus = Object.assign<User, Partial<UserStatusType>>(client.user, {
-    //   lastConnection: new Date().toISOString(),
-    // });
-    // await this.setUserStatus(userStatus);
-    // this.emitUserStatusToAll(this.convertUserStatusToUsersStatus(userStatus));
+    try {
+      let userStatus = await this.getUserStatus(client.user.id);
+      userStatus = Object.assign<User, Partial<UserStatusType>>(client.user, {
+        lastConnection: new Date().toISOString(),
+      });
+      await this.setUserStatus(userStatus);
+      this.emitUserStatusToAll(this.convertUserStatusToUsersStatus(userStatus));
+    } catch (error) {}
   }
 
   @UsePipes(new WsValidationPipe('initial-user-status'))

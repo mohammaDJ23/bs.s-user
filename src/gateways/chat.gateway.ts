@@ -1,6 +1,7 @@
 import {
   ConnectedSocket,
   MessageBody,
+  OnGatewayConnection,
   SubscribeMessage,
   WebSocketGateway,
   WebSocketServer,
@@ -13,7 +14,7 @@ import { FirebaseIdTokenGuard, JwtSocketGuard } from 'src/guards';
 import { FirebaseAdmin, InjectFirebaseAdmin } from 'nestjs-firebase';
 import { FieldValue, Filter } from '@google-cloud/firestore';
 import { User } from 'src/entities';
-import { UserService } from 'src/services';
+import { JwtService, UserService } from 'src/services';
 import { getConversationTargetId } from 'src/libs/conversationTargetId';
 import {
   MakeRoomIdsDto,
@@ -66,7 +67,7 @@ export class Conversation implements ConversationObj {
     ],
   },
 })
-export class ChatGateWay {
+export class ChatGateWay implements OnGatewayConnection {
   @WebSocketServer()
   private wss: Server;
   private conversationCollection: string =
@@ -75,7 +76,17 @@ export class ChatGateWay {
   constructor(
     @InjectFirebaseAdmin() private readonly firebase: FirebaseAdmin,
     private readonly userService: UserService,
+    private readonly jwtService: JwtService,
   ) {}
+
+  async handleConnection(@ConnectedSocket() client: Socket) {
+    try {
+      const user = await this.jwtService.verify(client);
+      if (!user) {
+        client.disconnect();
+      }
+    } catch (error) {}
+  }
 
   getCreatorRoomId(creator: User, target: User) {
     return `${creator.id}.${target.id}`;
