@@ -240,6 +240,7 @@ export class ChatGateWay {
   }
 
   @UsePipes(new WsValidationPipe('typing-text'))
+  @UseFilters(WsFilter)
   @SubscribeMessage('typing-text')
   typingText(
     @ConnectedSocket() client: Socket,
@@ -249,6 +250,7 @@ export class ChatGateWay {
   }
 
   @UsePipes(new WsValidationPipe('stoping-text'))
+  @UseFilters(WsFilter)
   @SubscribeMessage('stoping-text')
   stopingText(
     @ConnectedSocket() client: Socket,
