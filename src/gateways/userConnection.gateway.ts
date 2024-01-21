@@ -10,17 +10,20 @@ import {
 import {
   CACHE_MANAGER,
   Inject,
+  UseFilters,
   UseGuards,
   UsePipes,
-  ValidationPipe,
 } from '@nestjs/common';
 import { Server } from 'socket.io';
 import { JwtSocketGuard } from 'src/guards';
-import { Socket } from 'src/adapters';
 import { Cache } from 'cache-manager';
-import { CacheKeys, UserRoles } from 'src/types';
+import { CacheKeys, Socket, UserRoles } from 'src/types';
 import { InitialUserStatusDto, LogoutUserDto, UsersStatusDto } from 'src/dtos';
 import { User } from 'src/entities';
+import { WsValidationPipe } from 'src/pipes/ws.pipe';
+import { WsFilter } from 'src/filters';
+import { WsException } from 'src/exceptions';
+import { JwtService } from 'src/services';
 
 type UserStatusType = Socket['user'] & {
   lastConnection?: string | null;
@@ -35,6 +38,7 @@ type UsersStatusType = Record<number, UserStatusType>;
       process.env.CLIENT_CONTAINER_URL,
       process.env.CLIENT_AUTH_URL,
       process.env.CLIENT_BANK_URL,
+      process.env.CLIENT_CHAT_URL,
     ],
   },
 })
@@ -45,7 +49,10 @@ export class UserConnectionGateWay
   @WebSocketServer()
   private wss: Server;
 
-  constructor(@Inject(CACHE_MANAGER) private readonly cacheService: Cache) {}
+  constructor(
+    @Inject(CACHE_MANAGER) private readonly cacheService: Cache,
+    private readonly jwtService: JwtService,
+  ) {}
 
   getCacheKey(id: number) {
     return `${CacheKeys.USERS_STATUS}.${process.env.PORT}.${id}`;
@@ -76,88 +83,121 @@ export class UserConnectionGateWay
   }
 
   async handleConnection(@ConnectedSocket() client: Socket) {
-    let userStatus = await this.getUserStatus(client.user.id);
-
-    userStatus = Object.assign<User, Partial<UserStatusType>>(client.user, {
-      lastConnection: null,
-    });
-
-    await this.setUserStatus(userStatus);
-
-    this.emitUserStatusToAll(this.convertUserStatusToUsersStatus(userStatus));
+    try {
+      const user = await this.jwtService.verify(client);
+      if (!user) {
+        client.disconnect();
+      } else {
+        let userStatus = await this.getUserStatus(user.id);
+        userStatus = Object.assign<User, Partial<UserStatusType>>(user, {
+          lastConnection: null,
+        });
+        await this.setUserStatus(userStatus);
+        this.emitUserStatusToAll(
+          this.convertUserStatusToUsersStatus(userStatus),
+        );
+      }
+    } catch (error) {
+      client.disconnect();
+    }
   }
 
   async handleDisconnect(@ConnectedSocket() client: Socket) {
-    let userStatus = await this.getUserStatus(client.user.id);
-
-    userStatus = Object.assign<User, Partial<UserStatusType>>(client.user, {
-      lastConnection: new Date().toISOString(),
-    });
-
-    await this.setUserStatus(userStatus);
-
-    this.emitUserStatusToAll(this.convertUserStatusToUsersStatus(userStatus));
+    try {
+      const user = await this.jwtService.verify(client);
+      if (!user) {
+        client.disconnect();
+      } else {
+        let userStatus = await this.getUserStatus(user.id);
+        userStatus = Object.assign<User, Partial<UserStatusType>>(user, {
+          lastConnection: new Date().toISOString(),
+        });
+        await this.setUserStatus(userStatus);
+        this.emitUserStatusToAll(
+          this.convertUserStatusToUsersStatus(userStatus),
+        );
+      }
+    } catch (error) {}
   }
 
-  @UsePipes(new ValidationPipe())
+  @UsePipes(new WsValidationPipe('initial-user-status'))
+  @UseFilters(WsFilter)
+  @UseGuards(JwtSocketGuard)
   @SubscribeMessage('initial-user-status')
   async initialUserStatus(
     @ConnectedSocket() client: Socket,
     @MessageBody() data: InitialUserStatusDto,
   ) {
-    if (client.user.role === UserRoles.OWNER) {
-      const findedUserStatus: UserStatusType | undefined =
-        await this.getUserStatus(data.id);
+    try {
+      if (client.user.role === UserRoles.OWNER) {
+        const findedUserStatus: UserStatusType | undefined =
+          await this.getUserStatus(data.id);
 
-      let userStatus: UsersStatusType | object;
-      if (!findedUserStatus) {
-        userStatus = {};
-      } else {
-        userStatus = this.convertUserStatusToUsersStatus(findedUserStatus);
+        let userStatus: UsersStatusType | object;
+        if (!findedUserStatus) {
+          userStatus = {};
+        } else {
+          userStatus = this.convertUserStatusToUsersStatus(findedUserStatus);
+        }
+
+        client.emit('initial-user-status', userStatus);
       }
-
-      this.wss.to(client.id).emit('initial-user-status', userStatus);
+    } catch (error) {
+      throw new WsException('initial-user-status', error.message);
     }
   }
 
-  @UsePipes(new ValidationPipe())
+  @UsePipes(new WsValidationPipe('users-status'))
+  @UseFilters(WsFilter)
+  @UseGuards(JwtSocketGuard)
   @SubscribeMessage('users-status')
   async usersStatus(
     @ConnectedSocket() client: Socket,
     @MessageBody() data: UsersStatusDto,
   ) {
-    if (client.user.role === UserRoles.OWNER) {
-      const cachedUsersStatus = await Promise.all(
-        data.ids.map((id) => this.getUserStatus(id)),
-      );
-      const usersStatus = cachedUsersStatus
-        .filter(
-          (userStatus: UserStatusType | undefined) => userStatus && userStatus,
-        )
-        .reduce((acc, val) => {
-          acc = Object.assign(acc, this.convertUserStatusToUsersStatus(val));
-          return acc;
-        }, {} as UsersStatusType);
-      this.wss.to(client.id).emit('users-status', usersStatus);
+    try {
+      if (client.user.role === UserRoles.OWNER) {
+        const cachedUsersStatus = await Promise.all(
+          data.ids.map((id) => this.getUserStatus(id)),
+        );
+        const usersStatus = cachedUsersStatus
+          .filter(
+            (userStatus: UserStatusType | undefined) =>
+              userStatus && userStatus,
+          )
+          .reduce((acc, val) => {
+            acc = Object.assign(acc, this.convertUserStatusToUsersStatus(val));
+            return acc;
+          }, {} as UsersStatusType);
+        client.emit('users-status', usersStatus);
+      }
+    } catch (error) {
+      throw new WsException('users-status', error.message);
     }
   }
 
-  @UsePipes(new ValidationPipe())
+  @UsePipes(new WsValidationPipe('logout-user'))
+  @UseFilters(WsFilter)
+  @UseGuards(JwtSocketGuard)
   @SubscribeMessage('logout-user')
   async logoutUser(
     @ConnectedSocket() client: Socket,
     @MessageBody() data: LogoutUserDto,
   ) {
-    if (client.user.role === UserRoles.OWNER) {
-      const userStatus: UserStatusType | undefined = await this.getUserStatus(
-        data.id,
-      );
-      if (userStatus && userStatus.lastConnection === null) {
-        this.wss.emit(
-          'logout-user',
-          this.convertUserStatusToUsersStatus(userStatus),
+    try {
+      if (client.user.role === UserRoles.OWNER) {
+        const userStatus: UserStatusType | undefined = await this.getUserStatus(
+          data.id,
         );
+        if (userStatus && userStatus.lastConnection === null) {
+          this.wss.emit(
+            'logout-user',
+            this.convertUserStatusToUsersStatus(userStatus),
+          );
+        }
       }
+    } catch (error) {
+      throw new WsException('logout-user', error.message);
     }
   }
 }

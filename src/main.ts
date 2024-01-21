@@ -2,7 +2,6 @@ import { NestFactory } from '@nestjs/core';
 import { MicroserviceOptions, Transport } from '@nestjs/microservices';
 import { AppModule } from './modules';
 import { swagger } from './libs';
-import { AuthAdapter } from './adapters';
 import './libs/typeormOverwrites';
 
 require('dotenv').config();
@@ -24,7 +23,6 @@ async function bootstrap() {
 
   app.enableCors({ origin: '*' });
   swagger(app);
-  app.useWebSocketAdapter(new AuthAdapter(app));
   await app.startAllMicroservices();
   await app.listen(process.env.PORT);
 }
