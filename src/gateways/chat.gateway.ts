@@ -8,7 +8,7 @@ import {
 } from '@nestjs/websockets';
 import { Inject, UseFilters, UseGuards, UsePipes } from '@nestjs/common';
 import { Server } from 'socket.io';
-import { plainToClass } from 'class-transformer';
+import { classToPlain, plainToClass } from 'class-transformer';
 import { v4 as uuid } from 'uuid';
 import { FirebaseIdTokenGuard, JwtSocketGuard } from 'src/guards';
 import { FirebaseAdmin, InjectFirebaseAdmin } from 'nestjs-firebase';
@@ -254,8 +254,8 @@ export class ChatGateWay implements OnGatewayConnection {
                   data: JSON.stringify({
                     type: 'created_message',
                     title: 'A new message.',
-                    targetUser: userStatus,
-                    user: client.user,
+                    targetUser: plainToClass(UserDto, userStatus),
+                    user: plainToClass(UserDto, client.user),
                     message,
                   }),
                 },
