@@ -33,6 +33,7 @@ import { ClientProxy } from '@nestjs/microservices';
 
 export interface CreatedMessagePayloadObj extends UserObj {
   message: MessageObj;
+  targetUser: User;
 }
 
 export interface ConversationDocObj {
@@ -258,9 +259,13 @@ export class ChatGateWay implements OnGatewayConnection {
                 {
                   payload: {
                     data: {
-                      user: plainToClass(
+                      targetUser: plainToClass(
                         UserDto,
                         userStatus,
+                      ) as unknown as User,
+                      user: plainToClass(
+                        UserDto,
+                        client.user,
                       ) as unknown as User,
                       message,
                     },
