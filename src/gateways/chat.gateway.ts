@@ -6,7 +6,7 @@ import {
   WebSocketGateway,
   WebSocketServer,
 } from '@nestjs/websockets';
-import { UseFilters, UseGuards, UsePipes } from '@nestjs/common';
+import { Inject, UseFilters, UseGuards, UsePipes } from '@nestjs/common';
 import { Server } from 'socket.io';
 import { plainToClass } from 'class-transformer';
 import { v4 as uuid } from 'uuid';
@@ -14,7 +14,7 @@ import { FirebaseIdTokenGuard, JwtSocketGuard } from 'src/guards';
 import { FirebaseAdmin, InjectFirebaseAdmin } from 'nestjs-firebase';
 import { FieldValue, Filter } from '@google-cloud/firestore';
 import { User } from 'src/entities';
-import { JwtService, UserService } from 'src/services';
+import { JwtService, UserConnectionService, UserService } from 'src/services';
 import { getConversationTargetId } from 'src/libs/conversationTargetId';
 import {
   MakeRoomIdsDto,
@@ -28,7 +28,8 @@ import {
 import { WsFilter } from 'src/filters';
 import { WsException } from 'src/exceptions';
 import { WsValidationPipe } from 'src/pipes';
-import { Socket } from 'src/types';
+import { NotificationObj, Socket } from 'src/types';
+import { ClientProxy } from '@nestjs/microservices';
 
 export interface ConversationDocObj {
   id: string;
@@ -78,6 +79,9 @@ export class ChatGateWay implements OnGatewayConnection {
     @InjectFirebaseAdmin() private readonly firebase: FirebaseAdmin,
     private readonly userService: UserService,
     private readonly jwtService: JwtService,
+    private readonly userConnectionService: UserConnectionService,
+    @Inject(process.env.NOTIFICATION_RABBITMQ_SERVICE)
+    private readonly notificationClientProxy: ClientProxy,
   ) {}
 
   async handleConnection(@ConnectedSocket() client: Socket) {
@@ -219,10 +223,13 @@ export class ChatGateWay implements OnGatewayConnection {
 
         const batch = this.firebase.firestore.batch();
 
+        const targetUserId = getConversationTargetId(
+          client.user,
+          conversationDocData,
+        );
+
         batch.update(conversationDocRef, {
-          contributors: FieldValue.arrayUnion(
-            getConversationTargetId(client.user, conversationDocData),
-          ),
+          contributors: FieldValue.arrayUnion(targetUserId),
           lastMessage: message,
           updatedAt: FieldValue.serverTimestamp(),
         });
@@ -234,6 +241,29 @@ export class ChatGateWay implements OnGatewayConnection {
         data.message.status = MessageStatus.SUCCESS;
 
         this.wss.emit(data.roomId, data);
+
+        try {
+          const userStatus = await this.userConnectionService.getUserStatus(
+            targetUserId,
+          );
+
+          if (userStatus && userStatus.lastConnection) {
+            await this.notificationClientProxy
+              .emit<string, NotificationObj>('notification_to_user', {
+                payload: {
+                  data: JSON.stringify({
+                    type: 'created_message',
+                    title: 'A new message.',
+                    targetUser: userStatus,
+                    user: client.user,
+                    message,
+                  }),
+                },
+                user: client.user,
+              })
+              .toPromise();
+          }
+        } catch (error) {}
       } else {
         throw new Error('No document was found.');
       }
