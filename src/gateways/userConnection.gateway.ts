@@ -17,19 +17,18 @@ import {
 import { Server } from 'socket.io';
 import { JwtSocketGuard } from 'src/guards';
 import { Cache } from 'cache-manager';
-import { CacheKeys, Socket, UserRoles } from 'src/types';
+import { Socket, UserRoles } from 'src/types';
 import { InitialUserStatusDto, LogoutUserDto, UsersStatusDto } from 'src/dtos';
 import { User } from 'src/entities';
 import { WsValidationPipe } from 'src/pipes/ws.pipe';
 import { WsFilter } from 'src/filters';
 import { WsException } from 'src/exceptions';
-import { JwtService } from 'src/services';
-
-type UserStatusType = Socket['user'] & {
-  lastConnection?: string | null;
-};
-
-type UsersStatusType = Record<number, UserStatusType>;
+import {
+  JwtService,
+  UserConnectionService,
+  UserStatusType,
+  UsersStatusType,
+} from 'src/services';
 
 @WebSocketGateway({
   path: '/api/v1/user/socket/connection',
@@ -50,33 +49,9 @@ export class UserConnectionGateWay
   private wss: Server;
 
   constructor(
-    @Inject(CACHE_MANAGER) private readonly cacheService: Cache,
     private readonly jwtService: JwtService,
+    private readonly userConnectionService: UserConnectionService,
   ) {}
-
-  getCacheKey(id: number) {
-    return `${CacheKeys.USERS_STATUS}.${process.env.PORT}.${id}`;
-  }
-
-  getTtl(): number {
-    // 6 month
-    return 15778476000;
-  }
-
-  getUserStatus(id: number): Promise<UserStatusType | undefined> {
-    const cacheKey = this.getCacheKey(id);
-    return this.cacheService.get(cacheKey);
-  }
-
-  async setUserStatus(user: UserStatusType): Promise<void> {
-    const cacheKey = this.getCacheKey(user.id);
-    const ttl = this.getTtl();
-    await this.cacheService.set(cacheKey, user, ttl);
-  }
-
-  convertUserStatusToUsersStatus(user: UserStatusType): UsersStatusType {
-    return { [user.id]: user };
-  }
 
   emitUserStatusToAll(user: UsersStatusType): void {
     this.wss.emit('user-status', user);
@@ -88,13 +63,15 @@ export class UserConnectionGateWay
       if (!user) {
         client.disconnect();
       } else {
-        let userStatus = await this.getUserStatus(user.id);
+        let userStatus = await this.userConnectionService.getUserStatus(
+          user.id,
+        );
         userStatus = Object.assign<User, Partial<UserStatusType>>(user, {
           lastConnection: null,
         });
-        await this.setUserStatus(userStatus);
+        await this.userConnectionService.setUserStatus(userStatus);
         this.emitUserStatusToAll(
-          this.convertUserStatusToUsersStatus(userStatus),
+          this.userConnectionService.convertUserStatusToUsersStatus(userStatus),
         );
       }
     } catch (error) {
@@ -108,13 +85,15 @@ export class UserConnectionGateWay
       if (!user) {
         client.disconnect();
       } else {
-        let userStatus = await this.getUserStatus(user.id);
+        let userStatus = await this.userConnectionService.getUserStatus(
+          user.id,
+        );
         userStatus = Object.assign<User, Partial<UserStatusType>>(user, {
           lastConnection: new Date().toISOString(),
         });
-        await this.setUserStatus(userStatus);
+        await this.userConnectionService.setUserStatus(userStatus);
         this.emitUserStatusToAll(
-          this.convertUserStatusToUsersStatus(userStatus),
+          this.userConnectionService.convertUserStatusToUsersStatus(userStatus),
         );
       }
     } catch (error) {}
@@ -131,13 +110,16 @@ export class UserConnectionGateWay
     try {
       if (client.user.role === UserRoles.OWNER) {
         const findedUserStatus: UserStatusType | undefined =
-          await this.getUserStatus(data.id);
+          await this.userConnectionService.getUserStatus(data.id);
 
         let userStatus: UsersStatusType | object;
         if (!findedUserStatus) {
           userStatus = {};
         } else {
-          userStatus = this.convertUserStatusToUsersStatus(findedUserStatus);
+          userStatus =
+            this.userConnectionService.convertUserStatusToUsersStatus(
+              findedUserStatus,
+            );
         }
 
         client.emit('initial-user-status', userStatus);
@@ -158,7 +140,7 @@ export class UserConnectionGateWay
     try {
       if (client.user.role === UserRoles.OWNER) {
         const cachedUsersStatus = await Promise.all(
-          data.ids.map((id) => this.getUserStatus(id)),
+          data.ids.map((id) => this.userConnectionService.getUserStatus(id)),
         );
         const usersStatus = cachedUsersStatus
           .filter(
@@ -166,7 +148,10 @@ export class UserConnectionGateWay
               userStatus && userStatus,
           )
           .reduce((acc, val) => {
-            acc = Object.assign(acc, this.convertUserStatusToUsersStatus(val));
+            acc = Object.assign(
+              acc,
+              this.userConnectionService.convertUserStatusToUsersStatus(val),
+            );
             return acc;
           }, {} as UsersStatusType);
         client.emit('users-status', usersStatus);
@@ -186,13 +171,14 @@ export class UserConnectionGateWay
   ) {
     try {
       if (client.user.role === UserRoles.OWNER) {
-        const userStatus: UserStatusType | undefined = await this.getUserStatus(
-          data.id,
-        );
+        const userStatus: UserStatusType | undefined =
+          await this.userConnectionService.getUserStatus(data.id);
         if (userStatus && userStatus.lastConnection === null) {
           this.wss.emit(
             'logout-user',
-            this.convertUserStatusToUsersStatus(userStatus),
+            this.userConnectionService.convertUserStatusToUsersStatus(
+              userStatus,
+            ),
           );
         }
       }

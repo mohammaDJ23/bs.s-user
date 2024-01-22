@@ -2,7 +2,12 @@ import { CacheModule, Module, ValidationPipe } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { ClientsModule, Transport } from '@nestjs/microservices';
 import { TypeOrmModule } from '@nestjs/typeorm';
-import { UserService, RabbitmqService, JwtService } from '../services';
+import {
+  UserService,
+  RabbitmqService,
+  JwtService,
+  UserConnectionService,
+} from '../services';
 import { User } from '../entities';
 import { CustomNamingStrategy, JwtStrategy } from '../strategies';
 import { AllExceptionFilter } from '../filters';
@@ -104,6 +109,7 @@ import { join } from 'path';
     JwtService,
     JwtStrategy,
     RabbitmqService,
+    UserConnectionService,
     RestoreUserTransaction,
     DeleteUserTransaction,
     DeleteUserByOwnerTransaction,
