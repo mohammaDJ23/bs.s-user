@@ -1,11 +1,13 @@
 import { Inject, Injectable, forwardRef } from '@nestjs/common';
 import { UserService } from 'src/services';
-import { NotificationObj } from 'src/types';
+import { NotificationPayloadObj, UserObj } from 'src/types';
 import { DataSource, EntityManager } from 'typeorm';
 import { BaseTransaction } from './base.transaction';
 import { ClientProxy } from '@nestjs/microservices';
 import { User } from 'src/entities';
 import { CreateUserDto } from 'src/dtos';
+
+export interface CreatedUserPayloadObj extends UserObj {}
 
 @Injectable()
 export class CreateUserTransaction extends BaseTransaction {
@@ -35,16 +37,17 @@ export class CreateUserTransaction extends BaseTransaction {
       .send('created_user', { payload: createdUser, user })
       .toPromise();
     await this.notificationClientProxy
-      .emit<string, NotificationObj>('notification_to_owners', {
-        payload: {
-          data: JSON.stringify({
-            type: 'created_user',
-            title: 'A new user was created.',
-            createdUser,
-          }),
+      .emit<string, NotificationPayloadObj<CreatedUserPayloadObj>>(
+        'created_user_notification',
+        {
+          payload: {
+            data: {
+              user: createdUser,
+            },
+          },
+          user,
         },
-        user,
-      })
+      )
       .toPromise();
     return createdUser;
   }

@@ -28,8 +28,12 @@ import {
 import { WsFilter } from 'src/filters';
 import { WsException } from 'src/exceptions';
 import { WsValidationPipe } from 'src/pipes';
-import { NotificationObj, Socket } from 'src/types';
+import { NotificationPayloadObj, Socket, UserObj } from 'src/types';
 import { ClientProxy } from '@nestjs/microservices';
+
+export interface CreatedMessagePayloadObj extends UserObj {
+  message: MessageObj;
+}
 
 export interface ConversationDocObj {
   id: string;
@@ -249,18 +253,21 @@ export class ChatGateWay implements OnGatewayConnection {
 
           if (userStatus && userStatus.lastConnection) {
             await this.notificationClientProxy
-              .emit<string, NotificationObj>('notification_to_user', {
-                payload: {
-                  data: JSON.stringify({
-                    type: 'created_message',
-                    title: 'A new message.',
-                    targetUser: plainToClass(UserDto, userStatus),
-                    user: plainToClass(UserDto, client.user),
-                    message,
-                  }),
+              .emit<string, NotificationPayloadObj<CreatedMessagePayloadObj>>(
+                'created_message_notification',
+                {
+                  payload: {
+                    data: {
+                      user: plainToClass(
+                        UserDto,
+                        userStatus,
+                      ) as unknown as User,
+                      message,
+                    },
+                  },
+                  user: client.user,
                 },
-                user: client.user,
-              })
+              )
               .toPromise();
           }
         } catch (error) {}

@@ -92,9 +92,9 @@ export interface CacheKeyMetadata {
   options: CacheKeyOptions;
 }
 
-export interface NotificationObj extends UserObj {
+export interface NotificationPayloadObj<T = {}> extends UserObj {
   payload: {
-    data?: string | Buffer | null;
+    data: T;
     options?: RequestOptions;
   };
 }
