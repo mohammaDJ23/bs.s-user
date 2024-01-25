@@ -44,7 +44,7 @@ import { join } from 'path';
         isGlobal: true,
         store: await redisStore({
           url: `redis://:${process.env.REDIS_PASSWORD}@${process.env.REDIS_HOST}:${process.env.REDIS_PORT}`,
-          password: process.env.REDIS_PASSWORD,
+          // password: process.env.REDIS_PASSWORD,
           username: 'default',
         }),
         host: process.env.REDIS_HOST,
