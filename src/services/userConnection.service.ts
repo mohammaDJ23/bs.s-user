@@ -29,7 +29,7 @@ export class UserConnectionService {
   async setUserStatus(user: UserStatusType): Promise<void> {
     const cacheKey = this.getCacheKey(user.id);
     const ttl = this.getTtl();
-    await this.cacheService.set(cacheKey, user, ttl);
+    await this.cacheService.set(cacheKey, user);
   }
 
   convertUserStatusToUsersStatus(user: UserStatusType): UsersStatusType {
