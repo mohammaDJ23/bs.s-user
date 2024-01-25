@@ -43,7 +43,9 @@ import { join } from 'path';
       useFactory: async () => ({
         isGlobal: true,
         store: await redisStore({
-          url: `redis://:${process.env.REDIS_PASSWORD}@${process.env.REDIS_HOST}:${process.env.REDIS_PORT}`,
+          url: `redis://:${'process.env.REDIS_PASSWORD'}@${
+            process.env.REDIS_HOST
+          }:${process.env.REDIS_PORT}`,
           // password: process.env.REDIS_PASSWORD,
           username: 'default',
         }),
