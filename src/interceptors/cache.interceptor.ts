@@ -34,7 +34,12 @@ export class CacheInterceptor implements NestInterceptor {
         mergeMap(async (data: any) => {
           if (request.route.isPrivate) {
             cachedData[cacheKey][originalUrl] = data;
-            await this.cacheService.set(cacheKey, cachedData);
+            await this.cacheService.set(
+              cacheKey,
+              cachedData,
+              // one month
+              2629746000,
+            );
           }
           return data;
         }),

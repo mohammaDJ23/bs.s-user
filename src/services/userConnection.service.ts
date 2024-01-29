@@ -16,11 +16,6 @@ export class UserConnectionService {
     return `${CacheKeys.USERS_STATUS}.${process.env.PORT}.${id}`;
   }
 
-  getTtl(): number {
-    // 6 month
-    return 15778476000;
-  }
-
   getUserStatus(id: number): Promise<UserStatusType | undefined> {
     const cacheKey = this.getCacheKey(id);
     return this.cacheService.get(cacheKey);
@@ -28,8 +23,12 @@ export class UserConnectionService {
 
   async setUserStatus(user: UserStatusType): Promise<void> {
     const cacheKey = this.getCacheKey(user.id);
-    const ttl = this.getTtl();
-    await this.cacheService.set(cacheKey, user);
+    await this.cacheService.set(
+      cacheKey,
+      user,
+      // 6 months
+      15778476000,
+    );
   }
 
   convertUserStatusToUsersStatus(user: UserStatusType): UsersStatusType {
