@@ -1,12 +1,13 @@
 import { CACHE_MANAGER, Inject, Injectable } from '@nestjs/common';
-import { CacheKeys, Socket } from 'src/types';
+import { CacheKeys } from 'src/types';
 import { Cache } from 'cache-manager';
+import { plainToClass } from 'class-transformer';
+import { UserConnectionStatusDto } from 'src/dtos';
 
-export type UserStatusType = Socket['user'] & {
-  lastConnection?: string | null;
-};
+export interface ConnectionStatusObj
+  extends Pick<UserConnectionStatusDto, 'lastConnection' | 'agents'> {}
 
-export type UsersStatusType = Record<number, UserStatusType>;
+export type UsersStatusType = Record<number, UserConnectionStatusDto>;
 
 @Injectable()
 export class UserConnectionService {
@@ -16,12 +17,12 @@ export class UserConnectionService {
     return `${CacheKeys.USERS_STATUS}.${process.env.PORT}.${id}`;
   }
 
-  getUserStatus(id: number): Promise<UserStatusType | undefined> {
+  getUserStatus(id: number): Promise<UserConnectionStatusDto | undefined> {
     const cacheKey = this.getCacheKey(id);
     return this.cacheService.get(cacheKey);
   }
 
-  async setUserStatus(user: UserStatusType): Promise<void> {
+  async setUserStatus(user: UserConnectionStatusDto): Promise<void> {
     const cacheKey = this.getCacheKey(user.id);
     await this.cacheService.set(
       cacheKey,
@@ -31,7 +32,13 @@ export class UserConnectionService {
     );
   }
 
-  convertUserStatusToUsersStatus(user: UserStatusType): UsersStatusType {
-    return { [user.id]: user };
+  convertUserStatusToUsersStatus(
+    user: UserConnectionStatusDto,
+  ): UsersStatusType {
+    return {
+      [user.id]: plainToClass(UserConnectionStatusDto, user, {
+        excludeExtraneousValues: true,
+      }),
+    };
   }
 }

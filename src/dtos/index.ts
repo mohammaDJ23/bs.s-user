@@ -20,3 +20,4 @@ export * from './stopingText.dto';
 export * from './initialUserStatus.dto';
 export * from './usersStatus.dto';
 export * from './logoutUser.dto';
+export * from './userConnectionStatus.dto';
