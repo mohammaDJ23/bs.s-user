@@ -7,26 +7,25 @@ import {
   ConnectedSocket,
   MessageBody,
 } from '@nestjs/websockets';
-import {
-  CACHE_MANAGER,
-  Inject,
-  UseFilters,
-  UseGuards,
-  UsePipes,
-} from '@nestjs/common';
+import { UseFilters, UseGuards, UsePipes } from '@nestjs/common';
 import { Server } from 'socket.io';
 import { JwtSocketGuard } from 'src/guards';
-import { Cache } from 'cache-manager';
 import { Socket, UserRoles } from 'src/types';
-import { InitialUserStatusDto, LogoutUserDto, UsersStatusDto } from 'src/dtos';
+import {
+  InitialUserStatusDto,
+  LogoutUserDto,
+  UserConnectionStatusDto,
+  UserDto,
+  UsersStatusDto,
+} from 'src/dtos';
 import { User } from 'src/entities';
 import { WsValidationPipe } from 'src/pipes/ws.pipe';
 import { WsFilter } from 'src/filters';
 import { WsException } from 'src/exceptions';
 import {
+  ConnectionStatusObj,
   JwtService,
   UserConnectionService,
-  UserStatusType,
   UsersStatusType,
 } from 'src/services';
 
@@ -59,16 +58,22 @@ export class UserConnectionGateWay
 
   async handleConnection(@ConnectedSocket() client: Socket) {
     try {
-      const user = await this.jwtService.verify(client);
+      const user = (await this.jwtService.verify(client)) as unknown as UserDto;
       if (!user) {
         client.disconnect();
       } else {
         let userStatus = await this.userConnectionService.getUserStatus(
           user.id,
         );
-        userStatus = Object.assign<User, Partial<UserStatusType>>(user, {
+        const userAgents = client.handshake.headers['user-agent'];
+
+        userStatus = Object.assign<UserDto, ConnectionStatusObj>(user, {
           lastConnection: null,
+          agents: Object.assign(userStatus.agents || {}, {
+            [userAgents]: userAgents,
+          }),
         });
+
         await this.userConnectionService.setUserStatus(userStatus);
         this.emitUserStatusToAll(
           this.userConnectionService.convertUserStatusToUsersStatus(userStatus),
@@ -88,9 +93,13 @@ export class UserConnectionGateWay
         let userStatus = await this.userConnectionService.getUserStatus(
           user.id,
         );
-        userStatus = Object.assign<User, Partial<UserStatusType>>(user, {
-          lastConnection: new Date().toISOString(),
-        });
+
+        delete userStatus.agents[client.handshake.headers['user-agent']];
+
+        if (Object.keys(userStatus.agents).length <= 0) {
+          userStatus.lastConnection = new Date().toISOString();
+        }
+
         await this.userConnectionService.setUserStatus(userStatus);
         this.emitUserStatusToAll(
           this.userConnectionService.convertUserStatusToUsersStatus(userStatus),
@@ -109,10 +118,10 @@ export class UserConnectionGateWay
   ) {
     try {
       if (client.user.role === UserRoles.OWNER) {
-        const findedUserStatus: UserStatusType | undefined =
+        const findedUserStatus: UserConnectionStatusDto | undefined =
           await this.userConnectionService.getUserStatus(data.id);
 
-        let userStatus: UsersStatusType | object;
+        let userStatus: UsersStatusType;
         if (!findedUserStatus) {
           userStatus = {};
         } else {
@@ -144,7 +153,7 @@ export class UserConnectionGateWay
         );
         const usersStatus = cachedUsersStatus
           .filter(
-            (userStatus: UserStatusType | undefined) =>
+            (userStatus: UserConnectionStatusDto | undefined) =>
               userStatus && userStatus,
           )
           .reduce((acc, val) => {
@@ -171,7 +180,7 @@ export class UserConnectionGateWay
   ) {
     try {
       if (client.user.role === UserRoles.OWNER) {
-        const userStatus: UserStatusType | undefined =
+        const userStatus: UserConnectionStatusDto | undefined =
           await this.userConnectionService.getUserStatus(data.id);
         if (userStatus && userStatus.lastConnection === null) {
           this.wss.emit(
