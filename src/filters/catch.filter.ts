@@ -7,7 +7,6 @@ import {
 import { HttpArgumentsHost } from '@nestjs/common/interfaces/features/arguments-host.interface';
 import { AbstractHttpAdapter, HttpAdapterHost } from '@nestjs/core';
 import { MESSAGES } from '@nestjs/core/constants';
-import { RpcException } from '@nestjs/microservices';
 import { Exception } from 'src/types';
 
 @Catch()
@@ -47,13 +46,6 @@ export class AllExceptionFilter implements ExceptionFilter {
     if (process.env.NODE_ENV === 'development')
       console.log(exception, exception.constructor.name);
 
-    // some routes used for messagePattern and gateway are throwing rpc error
-    const isRpcException = exception instanceof RpcException;
-
-    // errors from messagePatterns
-    const isObjectException =
-      exception instanceof Object && Reflect.has(exception, 'response');
-
     // errors which are an string
     const isStringException = typeof exception === 'string';
 
@@ -62,20 +54,6 @@ export class AllExceptionFilter implements ExceptionFilter {
     let statusCode = HttpStatus.INTERNAL_SERVER_ERROR;
 
     switch (true) {
-      case isRpcException: {
-        const response = exception.getError().response;
-        message = this.getMessage(response);
-        statusCode = this.getStatusCode(response);
-        break;
-      }
-
-      case isObjectException: {
-        const response: Exception = exception.response;
-        message = this.getMessage(response);
-        statusCode = this.getStatusCode(response);
-        break;
-      }
-
       case isStringException: {
         message = exception;
         break;
