@@ -119,10 +119,10 @@ import { join } from 'path';
     UpdateUserTransaction,
     UpdateUserByOwnerTransaction,
     CreateUserTransaction,
+    { provide: APP_FILTER, useClass: AllExceptionFilter },
     { provide: APP_FILTER, useClass: HttpExceptionFilter },
     { provide: APP_FILTER, useClass: RpcExceptionFilter },
     { provide: APP_FILTER, useClass: ObjectExceptionFilter },
-    { provide: APP_FILTER, useClass: AllExceptionFilter },
     {
       provide: APP_PIPE,
       useValue: new ValidationPipe({
