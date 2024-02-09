@@ -2,7 +2,6 @@ import {
   ExceptionFilter,
   Catch,
   ArgumentsHost,
-  HttpException,
   HttpStatus,
 } from '@nestjs/common';
 import { HttpArgumentsHost } from '@nestjs/common/interfaces/features/arguments-host.interface';
@@ -48,9 +47,6 @@ export class AllExceptionFilter implements ExceptionFilter {
     if (process.env.NODE_ENV === 'development')
       console.log(exception, exception.constructor.name);
 
-    // HttpException inside the actual routes
-    const isHttpException = exception instanceof HttpException;
-
     // some routes used for messagePattern and gateway are throwing rpc error
     const isRpcException = exception instanceof RpcException;
 
@@ -66,13 +62,6 @@ export class AllExceptionFilter implements ExceptionFilter {
     let statusCode = HttpStatus.INTERNAL_SERVER_ERROR;
 
     switch (true) {
-      case isHttpException: {
-        const response: Exception = exception.getResponse();
-        message = this.getMessage(response);
-        statusCode = this.getStatusCode(response);
-        break;
-      }
-
       case isRpcException: {
         const response = exception.getError().response;
         message = this.getMessage(response);

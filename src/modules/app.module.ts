@@ -10,7 +10,7 @@ import {
 } from '../services';
 import { User } from '../entities';
 import { CustomNamingStrategy, JwtStrategy } from '../strategies';
-import { AllExceptionFilter } from '../filters';
+import { AllExceptionFilter, HttpExceptionFilter } from '../filters';
 import { APP_FILTER, APP_PIPE } from '@nestjs/core';
 import { PassportModule } from '@nestjs/passport';
 import { JwtModule } from '@nestjs/jwt';
@@ -115,6 +115,7 @@ import { join } from 'path';
     UpdateUserByOwnerTransaction,
     CreateUserTransaction,
     { provide: APP_FILTER, useClass: AllExceptionFilter },
+    { provide: APP_FILTER, useClass: HttpExceptionFilter },
     {
       provide: APP_PIPE,
       useValue: new ValidationPipe({
