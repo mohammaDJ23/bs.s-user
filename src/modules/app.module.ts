@@ -15,6 +15,7 @@ import {
   HttpExceptionFilter,
   RpcExceptionFilter,
   ObjectExceptionFilter,
+  QueryExceptionFilter,
 } from '../filters';
 import { APP_FILTER, APP_PIPE } from '@nestjs/core';
 import { PassportModule } from '@nestjs/passport';
@@ -120,9 +121,10 @@ import { join } from 'path';
     UpdateUserByOwnerTransaction,
     CreateUserTransaction,
     { provide: APP_FILTER, useClass: AllExceptionFilter },
+    { provide: APP_FILTER, useClass: ObjectExceptionFilter },
     { provide: APP_FILTER, useClass: HttpExceptionFilter },
     { provide: APP_FILTER, useClass: RpcExceptionFilter },
-    { provide: APP_FILTER, useClass: ObjectExceptionFilter },
+    { provide: APP_FILTER, useClass: QueryExceptionFilter },
     {
       provide: APP_PIPE,
       useValue: new ValidationPipe({
