@@ -1,16 +1,16 @@
 import { Inject, Injectable, forwardRef } from '@nestjs/common';
 import { UserService } from 'src/services';
-import { CreateUserObj, NotificationObj } from 'src/types';
+import { NotificationPayloadObj, UserObj } from 'src/types';
 import { DataSource, EntityManager } from 'typeorm';
 import { BaseTransaction } from './base.transaction';
 import { ClientProxy } from '@nestjs/microservices';
 import { User } from 'src/entities';
+import { CreateUserDto } from 'src/dtos';
+
+export interface CreatedUserPayloadObj extends UserObj {}
 
 @Injectable()
-export class CreateUserTransaction extends BaseTransaction<
-  CreateUserObj,
-  User
-> {
+export class CreateUserTransaction extends BaseTransaction {
   constructor(
     dataSource: DataSource,
     @Inject(process.env.BANK_RABBITMQ_SERVICE)
@@ -24,25 +24,30 @@ export class CreateUserTransaction extends BaseTransaction<
   }
 
   protected async execute(
-    data: CreateUserObj,
     manager: EntityManager,
+    payload: CreateUserDto,
+    user: User,
   ): Promise<User> {
     const createdUser = await this.userService.createWithEntityManager(
-      data.payload,
-      data.currentUser,
       manager,
+      payload,
+      user,
     );
     await this.bankClientProxy
-      .send('created_user', { createdUser, currentUser: data.currentUser })
+      .send('created_user', { payload: createdUser, user })
       .toPromise();
     await this.notificationClientProxy
-      .emit<string, NotificationObj>('notification_to_owners', {
-        payload: JSON.stringify({
-          type: 'created_user',
-          title: 'A new user was created.',
-          createdUser,
-        }),
-      })
+      .emit<string, NotificationPayloadObj<CreatedUserPayloadObj>>(
+        'created_user_notification',
+        {
+          payload: {
+            data: {
+              user: createdUser,
+            },
+          },
+          user,
+        },
+      )
       .toPromise();
     return createdUser;
   }

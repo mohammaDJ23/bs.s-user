@@ -10,6 +10,9 @@ services:
       - ${PORT}:${PORT}
     networks:
       - services_app-network
+    volumes:
+      - /root/services/firebase/firebase.config.json:/usr/src/app/firebase.config.json
+      - /root/services/firebase/firebase.config.json:/usr/src/app/dist/firebase.config.json
 
 networks:
   services_app-network:

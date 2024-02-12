@@ -25,9 +25,14 @@ import {
   AccessTokenDto,
   UserListFiltersDto,
   DeletedUserListFiltersDto,
-  DeletedUserDto,
 } from 'src/dtos';
-import { CurrentUser, Roles, SameUser } from 'src/decorators';
+import {
+  CurrentUser,
+  DissimilarRoles,
+  ParentId,
+  Roles,
+  SameRoles,
+} from 'src/decorators';
 import {
   ApiBody,
   ApiResponse,
@@ -37,10 +42,10 @@ import {
   ApiQuery,
 } from '@nestjs/swagger';
 import {
-  DifferentOwnerGuard,
+  DissimilarRolesGuard,
   JwtGuard,
   RolesGuard,
-  SameUserGuard,
+  SameRolesGuard,
 } from 'src/guards';
 import { User } from 'src/entities';
 import { UserRoles } from 'src/types';
@@ -81,8 +86,7 @@ export class userController {
   @Put('update')
   @HttpCode(HttpStatus.OK)
   @Roles(UserRoles.ADMIN, UserRoles.USER)
-  @SameUser(UserRoles.ADMIN, UserRoles.USER)
-  @UseGuards(RolesGuard, SameUserGuard)
+  @UseGuards(RolesGuard)
   @UseInterceptors(TokenizeInterceptor)
   @ApiBody({ type: UpdateUserByUserDto })
   @ApiBearerAuth()
@@ -98,12 +102,14 @@ export class userController {
     return this.userService.updateByUser(body, user);
   }
 
-  @Put('owner/update')
+  @Put('owner/update/:id')
   @HttpCode(HttpStatus.OK)
   @Roles(UserRoles.OWNER)
-  @UseGuards(RolesGuard, DifferentOwnerGuard)
+  @DissimilarRoles(UserRoles.OWNER)
+  @UseGuards(RolesGuard, DissimilarRolesGuard)
   @UseInterceptors(TokenizeInterceptor)
   @ApiBody({ type: UpdateUserByOwnerDto })
+  @ApiParam({ name: 'id', type: 'number' })
   @ApiBearerAuth()
   @ApiResponse({ status: HttpStatus.OK, type: AccessTokenDto })
   @ApiResponse({ status: HttpStatus.UNAUTHORIZED, type: ErrorDto })
@@ -111,28 +117,46 @@ export class userController {
   @ApiResponse({ status: HttpStatus.NOT_FOUND, type: ErrorDto })
   @ApiResponse({ status: HttpStatus.INTERNAL_SERVER_ERROR, type: ErrorDto })
   updateByOwner(
+    @Param('id', ParseIntPipe) id: number,
     @Body() body: UpdateUserByOwnerDto,
+    @ParentId() parentId: number,
     @CurrentUser() user: User,
   ): Promise<User> {
-    return this.userService.updateByOwner(body, user);
+    return this.userService.updateByOwner(id, parentId, body, user);
   }
 
   @Delete('delete')
   @HttpCode(HttpStatus.OK)
-  @SameUser(UserRoles.ADMIN, UserRoles.USER)
-  @UseGuards(SameUserGuard, DifferentOwnerGuard)
+  @Roles(UserRoles.ADMIN, UserRoles.USER)
+  @UseGuards(RolesGuard)
   @UseInterceptors(UserSerializerInterceptor)
-  @ApiQuery({ name: 'id', type: 'number' })
   @ApiBearerAuth()
   @ApiResponse({ status: HttpStatus.OK, type: UserDto })
   @ApiResponse({ status: HttpStatus.UNAUTHORIZED, type: ErrorDto })
   @ApiResponse({ status: HttpStatus.NOT_FOUND, type: ErrorDto })
   @ApiResponse({ status: HttpStatus.INTERNAL_SERVER_ERROR, type: ErrorDto })
-  delete(
-    @Query('id', ParseIntPipe) id: number,
+  deleteByUser(@CurrentUser() user: User): Promise<User> {
+    return this.userService.deleteByUser(user);
+  }
+
+  @Delete('owner/delete/:id')
+  @HttpCode(HttpStatus.OK)
+  @Roles(UserRoles.OWNER)
+  @DissimilarRoles(UserRoles.OWNER)
+  @UseGuards(RolesGuard, DissimilarRolesGuard)
+  @UseInterceptors(UserSerializerInterceptor)
+  @ApiParam({ name: 'id', type: 'number' })
+  @ApiBearerAuth()
+  @ApiResponse({ status: HttpStatus.OK, type: UserDto })
+  @ApiResponse({ status: HttpStatus.UNAUTHORIZED, type: ErrorDto })
+  @ApiResponse({ status: HttpStatus.NOT_FOUND, type: ErrorDto })
+  @ApiResponse({ status: HttpStatus.INTERNAL_SERVER_ERROR, type: ErrorDto })
+  deleteByOwner(
+    @Param('id', ParseIntPipe) id: number,
+    @ParentId() parentId: number,
     @CurrentUser() user: User,
   ): Promise<User> {
-    return this.userService.delete(id, user);
+    return this.userService.deleteByOwner(id, parentId, user);
   }
 
   @Get('all')
@@ -142,7 +166,7 @@ export class userController {
   @UseInterceptors(UsersSerializerInterceptor)
   @ApiQuery({ name: 'page', type: 'number' })
   @ApiQuery({ name: 'take', type: 'number' })
-  @ApiParam({ name: 'filters', type: UserListFiltersDto })
+  @ApiQuery({ name: 'filters', type: UserListFiltersDto })
   @ApiBearerAuth()
   @ApiResponse({ status: HttpStatus.OK, type: UserDto, isArray: true })
   @ApiResponse({ status: HttpStatus.UNAUTHORIZED, type: ErrorDto })
@@ -155,6 +179,25 @@ export class userController {
     return this.userService.findAll(page, take, filters);
   }
 
+  @Get('all/owners')
+  @HttpCode(HttpStatus.OK)
+  @UseGuards(RolesGuard)
+  @UseInterceptors(UsersSerializerInterceptor)
+  @ApiQuery({ name: 'page', type: 'number' })
+  @ApiQuery({ name: 'take', type: 'number' })
+  @ApiQuery({ name: 'filters', type: UserListFiltersDto })
+  @ApiBearerAuth()
+  @ApiResponse({ status: HttpStatus.OK, type: UserDto, isArray: true })
+  @ApiResponse({ status: HttpStatus.UNAUTHORIZED, type: ErrorDto })
+  @ApiResponse({ status: HttpStatus.INTERNAL_SERVER_ERROR, type: ErrorDto })
+  findAllOwners(
+    @Query('page', ParseIntPipe) page: number,
+    @Query('take', ParseIntPipe) take: number,
+    @Query('filters', ParseUserListFiltersPipe) filters: UserListFiltersDto,
+  ): Promise<[User[], number]> {
+    return this.userService.findAllOwners(page, take, filters);
+  }
+
   @Get('all/deleted')
   @HttpCode(HttpStatus.OK)
   @Roles(UserRoles.OWNER)
@@ -162,7 +205,7 @@ export class userController {
   @UseInterceptors(UsersSerializerInterceptor)
   @ApiQuery({ name: 'page', type: 'number' })
   @ApiQuery({ name: 'take', type: 'number' })
-  @ApiParam({ name: 'filters', type: DeletedUserListFiltersDto })
+  @ApiQuery({ name: 'filters', type: DeletedUserListFiltersDto })
   @ApiBearerAuth()
   @ApiResponse({ status: HttpStatus.OK, type: UserDto, isArray: true })
   @ApiResponse({ status: HttpStatus.UNAUTHORIZED, type: ErrorDto })
@@ -220,8 +263,9 @@ export class userController {
 
   @Get(':id')
   @HttpCode(HttpStatus.OK)
-  @SameUser(UserRoles.ADMIN, UserRoles.USER)
-  @UseGuards(SameUserGuard, DifferentOwnerGuard)
+  @SameRoles(UserRoles.ADMIN, UserRoles.USER)
+  @DissimilarRoles(UserRoles.OWNER)
+  @UseGuards(SameRolesGuard, DissimilarRolesGuard)
   @UseInterceptors(UserSerializerInterceptor)
   @ApiParam({ name: 'id', type: 'number' })
   @ApiBearerAuth()
@@ -233,24 +277,22 @@ export class userController {
     return this.userService.findByIdOrFail(id);
   }
 
-  @Get(':id/deleted')
+  @Get('deleted/:id')
   @HttpCode(HttpStatus.OK)
   @Roles(UserRoles.OWNER)
   @UseGuards(RolesGuard)
   @UseInterceptors(DeletedUserSerializerInterceptor)
   @ApiParam({ name: 'id', type: 'number' })
   @ApiBearerAuth()
-  @ApiResponse({ status: HttpStatus.OK, type: DeletedUserDto })
+  @ApiResponse({ status: HttpStatus.OK, type: UserDto })
   @ApiResponse({ status: HttpStatus.UNAUTHORIZED, type: ErrorDto })
   @ApiResponse({ status: HttpStatus.NOT_FOUND, type: ErrorDto })
   @ApiResponse({ status: HttpStatus.INTERNAL_SERVER_ERROR, type: ErrorDto })
-  async findByIdDeleted(
-    @Param('id', ParseIntPipe) id: number,
-  ): Promise<DeletedUserDto> {
+  async findByIdDeleted(@Param('id', ParseIntPipe) id: number): Promise<User> {
     return this.userService.findByIdDeleted(id);
   }
 
-  @Post(':id/restore')
+  @Post('restore/:id')
   @HttpCode(HttpStatus.OK)
   @Roles(UserRoles.OWNER)
   @UseGuards(RolesGuard)
@@ -263,8 +305,9 @@ export class userController {
   @ApiResponse({ status: HttpStatus.INTERNAL_SERVER_ERROR, type: ErrorDto })
   restore(
     @Param('id', ParseIntPipe) id: number,
+    @ParentId() parentId: number,
     @CurrentUser() user: User,
   ): Promise<User> {
-    return this.userService.restore(id, user);
+    return this.userService.restore(id, parentId, user);
   }
 }

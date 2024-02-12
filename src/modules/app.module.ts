@@ -2,35 +2,59 @@ import { CacheModule, Module, ValidationPipe } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { ClientsModule, Transport } from '@nestjs/microservices';
 import { TypeOrmModule } from '@nestjs/typeorm';
-import { UserService, RabbitmqService } from '../services';
+import {
+  UserService,
+  RabbitmqService,
+  JwtService,
+  UserConnectionService,
+} from '../services';
 import { User } from '../entities';
 import { CustomNamingStrategy, JwtStrategy } from '../strategies';
-import { AllExceptionFilter } from '../filters';
+import {
+  AllExceptionFilter,
+  HttpExceptionFilter,
+  RpcExceptionFilter,
+  ObjectExceptionFilter,
+  QueryExceptionFilter,
+} from '../filters';
 import { APP_FILTER, APP_PIPE } from '@nestjs/core';
 import { PassportModule } from '@nestjs/passport';
 import { JwtModule } from '@nestjs/jwt';
 import { UserMessagePatternController, userController } from '../controllers';
-import { UserConnectionGateWay } from 'src/gateways';
+import { ChatGateWay, UserConnectionGateWay } from 'src/gateways';
 import { redisStore } from 'cache-manager-redis-yet';
 import {
   CreateUserTransaction,
+  DeleteUserByOwnerTransaction,
   DeleteUserTransaction,
   RestoreUserTransaction,
+  UpdateUserByOwnerTransaction,
   UpdateUserTransaction,
 } from 'src/transactions';
+import { ScheduleModule } from '@nestjs/schedule';
+import { FirebaseModule } from 'nestjs-firebase';
+import { join } from 'path';
 
 @Module({
   imports: [
+    FirebaseModule.forRoot({
+      googleApplicationCredential: join(
+        __dirname,
+        '../',
+        'firebase.config.json',
+      ),
+    }),
+    ScheduleModule.forRoot(),
     CacheModule.registerAsync({
       useFactory: async () => ({
         isGlobal: true,
         store: await redisStore({
-          ttl: +process.env.REDIS_TTL,
-          url: `redis://${process.env.REDIS_HOST}:${process.env.REDIS_PORT}`,
+          url: `redis://:${process.env.REDIS_PASSWORD}@${process.env.REDIS_HOST}:${process.env.REDIS_PORT}`,
+          password: process.env.REDIS_PASSWORD,
+          username: 'default',
         }),
         host: process.env.REDIS_HOST,
         port: process.env.REDIS_PORT,
-        ttl: +process.env.REDIS_TTL,
       }),
     }),
     ClientsModule.register([
@@ -86,13 +110,21 @@ import {
   controllers: [userController, UserMessagePatternController],
   providers: [
     UserService,
+    JwtService,
     JwtStrategy,
     RabbitmqService,
+    UserConnectionService,
     RestoreUserTransaction,
     DeleteUserTransaction,
+    DeleteUserByOwnerTransaction,
     UpdateUserTransaction,
+    UpdateUserByOwnerTransaction,
     CreateUserTransaction,
     { provide: APP_FILTER, useClass: AllExceptionFilter },
+    { provide: APP_FILTER, useClass: ObjectExceptionFilter },
+    { provide: APP_FILTER, useClass: HttpExceptionFilter },
+    { provide: APP_FILTER, useClass: RpcExceptionFilter },
+    { provide: APP_FILTER, useClass: QueryExceptionFilter },
     {
       provide: APP_PIPE,
       useValue: new ValidationPipe({
@@ -100,6 +132,7 @@ import {
       }),
     },
     UserConnectionGateWay,
+    ChatGateWay,
   ],
 })
 export class AppModule {}

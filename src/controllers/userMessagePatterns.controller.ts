@@ -7,7 +7,11 @@ import {
 } from '@nestjs/microservices';
 import { UserService } from '../services';
 import { User } from 'src/entities';
-import { UpdatedUserPartialObj } from 'src/types';
+import {
+  FindUserByEmailObj,
+  FindUserByIdObj,
+  UpdatedUserPartialObj,
+} from 'src/types';
 
 @Controller('/message-pattenrs/v1/user')
 export class UserMessagePatternController {
@@ -18,19 +22,22 @@ export class UserMessagePatternController {
     @Payload() payload: UpdatedUserPartialObj,
     @Ctx() context: RmqContext,
   ): Promise<User> {
-    return this.userService.updateByMicroservice(payload, context);
+    return this.userService.updateByMicroservice(context, payload.payload);
   }
 
   @MessagePattern('find_user_by_id')
-  findById(@Payload() id: number, @Ctx() context: RmqContext): Promise<User> {
-    return this.userService.findByIdByMicroservice(id, context);
+  findById(
+    @Payload() payload: FindUserByIdObj,
+    @Ctx() context: RmqContext,
+  ): Promise<User> {
+    return this.userService.findByIdByMicroservice(context, payload.payload);
   }
 
   @MessagePattern('find_user_by_email')
   findByEmail(
-    @Payload() email: string,
+    @Payload() payload: FindUserByEmailObj,
     @Ctx() context: RmqContext,
   ): Promise<User> {
-    return this.userService.findByEmailByMicroservice(email, context);
+    return this.userService.findByEmailByMicroservice(context, payload.payload);
   }
 }
