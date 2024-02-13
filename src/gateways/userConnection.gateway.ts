@@ -50,7 +50,9 @@ export class UserConnectionGateWay
   constructor(
     private readonly jwtService: JwtService,
     private readonly userConnectionService: UserConnectionService,
-  ) {}
+  ) {
+    console.log('estableshing the socket');
+  }
 
   emitUserStatusToAll(user: UsersStatusType): void {
     this.wss.emit('user-status', user);
@@ -58,7 +60,9 @@ export class UserConnectionGateWay
 
   async handleConnection(@ConnectedSocket() client: Socket) {
     try {
+      console.log('connected');
       const user = (await this.jwtService.verify(client)) as unknown as UserDto;
+      console.log(user);
       if (!user) {
         client.disconnect();
       } else {
