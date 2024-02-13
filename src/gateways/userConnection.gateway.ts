@@ -78,12 +78,20 @@ export class UserConnectionGateWay
           }),
         });
 
+        console.log('ready to cache', userStatus);
+
         await this.userConnectionService.setUserStatus(userStatus);
+
+        console.log('cached');
+
         this.emitUserStatusToAll(
           this.userConnectionService.convertUserStatusToUsersStatus(userStatus),
         );
+
+        console.log('emit to all');
       }
     } catch (error) {
+      console.log(error);
       client.disconnect();
     }
   }
