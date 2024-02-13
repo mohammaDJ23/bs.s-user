@@ -50,9 +50,7 @@ export class UserConnectionGateWay
   constructor(
     private readonly jwtService: JwtService,
     private readonly userConnectionService: UserConnectionService,
-  ) {
-    console.log('estableshing the socket');
-  }
+  ) {}
 
   emitUserStatusToAll(user: UsersStatusType): void {
     this.wss.emit('user-status', user);
@@ -60,15 +58,14 @@ export class UserConnectionGateWay
 
   async handleConnection(@ConnectedSocket() client: Socket) {
     try {
-      console.log('connected');
       const user = (await this.jwtService.verify(client)) as unknown as UserDto;
-      console.log(user);
       if (!user) {
         client.disconnect();
       } else {
-        let userStatus = await this.userConnectionService.getUserStatus(
-          user.id,
-        );
+        let userStatus =
+          (await this.userConnectionService.getUserStatus(user.id)) ||
+          ({} as UserConnectionStatusDto);
+
         const userAgents = client.handshake.headers['user-agent'];
 
         userStatus = Object.assign<UserDto, ConnectionStatusObj>(user, {
@@ -78,20 +75,13 @@ export class UserConnectionGateWay
           }),
         });
 
-        console.log('ready to cache', userStatus);
-
         await this.userConnectionService.setUserStatus(userStatus);
-
-        console.log('cached');
 
         this.emitUserStatusToAll(
           this.userConnectionService.convertUserStatusToUsersStatus(userStatus),
         );
-
-        console.log('emit to all');
       }
     } catch (error) {
-      console.log(error);
       client.disconnect();
     }
   }
