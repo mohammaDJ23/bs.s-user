@@ -225,6 +225,16 @@ export class UserService {
       .getOneOrFail();
   }
 
+  findByIdOrFailWithDeleted(id: number): Promise<User> {
+    return this.userRepository
+      .createQueryBuilder('user')
+      .leftJoinAndSelect('user.parent', 'parent')
+      .withDeleted()
+      .where('user.id = :id')
+      .setParameters({ id })
+      .getOneOrFail();
+  }
+
   async findByIdOrFailByMicroservice(
     context: RmqContext,
     payload: FindUserByIdObj['payload'],

@@ -88,7 +88,7 @@ export class UserConnectionGateWay
 
   async handleDisconnect(@ConnectedSocket() client: Socket) {
     try {
-      const user = await this.jwtService.verify(client);
+      const user = await this.jwtService.verifyWithDeleted(client);
       if (!user) {
         client.disconnect();
       } else {
@@ -107,7 +107,9 @@ export class UserConnectionGateWay
           this.userConnectionService.convertUserStatusToUsersStatus(userStatus),
         );
       }
-    } catch (error) {}
+    } catch (error) {
+      client.disconnect();
+    }
   }
 
   @UsePipes(new WsValidationPipe('initial-user-status'))
