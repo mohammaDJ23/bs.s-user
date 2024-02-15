@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, UnauthorizedException } from '@nestjs/common';
 import { JwtService as JwService } from '@nestjs/jwt';
 import { User } from 'src/entities';
 import { EncryptedUserObj, Socket } from 'src/types';
@@ -11,17 +11,24 @@ export class JwtService {
     private readonly userService: UserService,
   ) {}
 
-  async verify(client: Socket): Promise<User | null> {
+  async decodeToken(client: Socket): Promise<EncryptedUserObj> {
     const bearerToken = client.handshake.headers.authorization;
 
     if (bearerToken && typeof bearerToken === 'string') {
       const [_, token] = bearerToken.split(' ');
-      const decodedToken = await this.jwtService.verifyAsync<EncryptedUserObj>(
-        token,
-      );
-      return this.userService.findByIdOrFail(decodedToken.id);
+      return this.jwtService.verifyAsync<EncryptedUserObj>(token);
     }
 
-    return null;
+    throw new UnauthorizedException();
+  }
+
+  async verify(client: Socket): Promise<User | null> {
+    const decodedToken = await this.decodeToken(client);
+    return this.userService.findByIdOrFail(decodedToken.id);
+  }
+
+  async verifyWithDeleted(client: Socket): Promise<User | null> {
+    const decodedToken = await this.decodeToken(client);
+    return this.userService.findByIdOrFailWithDeleted(decodedToken.id);
   }
 }
