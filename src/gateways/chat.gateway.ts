@@ -108,6 +108,68 @@ export class ChatGateWay implements OnGatewayConnection {
     return `${target.id}.${creator.id}`;
   }
 
+  async createNewConversation(client: Socket, data: StartConversationDto) {
+    const user = await this.userService.findByIdOrFail(data.id);
+
+    const creatorRoomId = this.getCreatorRoomId(client.user, user);
+    const targetRoomId = this.getTargetRoomId(user, client.user);
+
+    let conversationDocObj: ConversationDocObj;
+
+    const result = await this.firebase.firestore
+      .collection(this.conversationCollection)
+      .where(
+        Filter.or(
+          Filter.where('roomId', '==', creatorRoomId),
+          Filter.where('roomId', '==', targetRoomId),
+        ),
+      )
+      .get();
+
+    if (result.empty) {
+      const doc: ConversationDocObj = {
+        id: uuid(),
+        creatorId: client.user.id,
+        targetId: user.id,
+        roomId: creatorRoomId,
+        isCreatorTyping: false,
+        isTargetTyping: false,
+        contributors: [client.user.id],
+        lastMessage: null,
+        createdAt: FieldValue.serverTimestamp(),
+        updatedAt: FieldValue.serverTimestamp(),
+        deletedAt: null,
+        deletedBy: null,
+      };
+
+      await this.firebase.firestore
+        .collection(this.conversationCollection)
+        .doc(creatorRoomId)
+        .set(doc);
+
+      conversationDocObj = doc;
+    } else {
+      const [doc] = result.docs;
+      const docData = doc.data() as ConversationDocObj;
+
+      await this.firebase.firestore
+        .collection(this.conversationCollection)
+        .doc(docData.roomId)
+        .update({
+          contributors: FieldValue.arrayUnion(client.user.id),
+          updatedAt: FieldValue.serverTimestamp(),
+        });
+
+      conversationDocObj = docData;
+    }
+
+    const plainUser = plainToClass(UserDto, user, {
+      excludeExtraneousValues: true,
+    }) as unknown as User;
+
+    return new Conversation(plainUser, conversationDocObj);
+  }
+
   @UsePipes(new WsValidationPipe('start-conversation'))
   @UseFilters(WsFilter)
   @UseGuards(JwtSocketGuard, FirebaseIdTokenGuard)
@@ -117,70 +179,25 @@ export class ChatGateWay implements OnGatewayConnection {
     @MessageBody() data: StartConversationDto,
   ) {
     try {
-      const user = await this.userService.findByIdOrFail(data.id);
-
-      const creatorRoomId = this.getCreatorRoomId(client.user, user);
-      const targetRoomId = this.getTargetRoomId(user, client.user);
-
-      let conversationDocObj: ConversationDocObj;
-
-      const result = await this.firebase.firestore
-        .collection(this.conversationCollection)
-        .where(
-          Filter.or(
-            Filter.where('roomId', '==', creatorRoomId),
-            Filter.where('roomId', '==', targetRoomId),
-          ),
-        )
-        .get();
-
-      if (result.empty) {
-        const doc: ConversationDocObj = {
-          id: uuid(),
-          creatorId: client.user.id,
-          targetId: user.id,
-          roomId: creatorRoomId,
-          isCreatorTyping: false,
-          isTargetTyping: false,
-          contributors: [client.user.id],
-          lastMessage: null,
-          createdAt: FieldValue.serverTimestamp(),
-          updatedAt: FieldValue.serverTimestamp(),
-          deletedAt: null,
-          deletedBy: null,
-        };
-
-        await this.firebase.firestore
-          .collection(this.conversationCollection)
-          .doc(creatorRoomId)
-          .set(doc);
-
-        conversationDocObj = doc;
-      } else {
-        const [doc] = result.docs;
-        const docData = doc.data() as ConversationDocObj;
-
-        await this.firebase.firestore
-          .collection(this.conversationCollection)
-          .doc(docData.roomId)
-          .update({
-            contributors: FieldValue.arrayUnion(client.user.id),
-            updatedAt: FieldValue.serverTimestamp(),
-          });
-
-        conversationDocObj = docData;
-      }
-
-      const plainUser = plainToClass(UserDto, user, {
-        excludeExtraneousValues: true,
-      }) as unknown as User;
-
-      client.emit(
-        'start-conversation',
-        new Conversation(plainUser, conversationDocObj),
-      );
+      const conversation = await this.createNewConversation(client, data);
+      client.emit('start-conversation', conversation);
     } catch (error) {
       throw new WsException('start-conversation', error.message);
+    }
+  }
+
+  @UsePipes(new WsValidationPipe('start-conversation-with-ack'))
+  @UseFilters(WsFilter)
+  @UseGuards(JwtSocketGuard, FirebaseIdTokenGuard)
+  @SubscribeMessage('start-conversation-with-ack')
+  async startConversationWithAck(
+    @ConnectedSocket() client: Socket,
+    @MessageBody() data: StartConversationDto,
+  ) {
+    try {
+      return await this.createNewConversation(client, data);
+    } catch (error) {
+      throw new WsException('start-conversation-with-ack', error.message);
     }
   }
 
