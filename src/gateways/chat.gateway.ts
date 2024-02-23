@@ -5,10 +5,11 @@ import {
   SubscribeMessage,
   WebSocketGateway,
   WebSocketServer,
+  WsException as WebSocketException,
 } from '@nestjs/websockets';
 import { Inject, UseFilters, UseGuards, UsePipes } from '@nestjs/common';
 import { Server } from 'socket.io';
-import { classToPlain, plainToClass } from 'class-transformer';
+import { plainToClass } from 'class-transformer';
 import { v4 as uuid } from 'uuid';
 import { FirebaseIdTokenGuard, JwtSocketGuard } from 'src/guards';
 import { FirebaseAdmin, InjectFirebaseAdmin } from 'nestjs-firebase';
@@ -28,7 +29,7 @@ import {
 import { WsFilter } from 'src/filters';
 import { WsException } from 'src/exceptions';
 import { WsValidationPipe } from 'src/pipes';
-import { NotificationPayloadObj, Socket, UserObj } from 'src/types';
+import { NotificationPayloadObj, Socket, UserObj, UserRoles } from 'src/types';
 import { ClientProxy } from '@nestjs/microservices';
 
 export interface CreatedMessagePayloadObj extends UserObj {
@@ -111,63 +112,70 @@ export class ChatGateWay implements OnGatewayConnection {
   async createNewConversation(client: Socket, data: StartConversationDto) {
     const user = await this.userService.findByIdOrFail(data.id);
 
-    const creatorRoomId = this.getCreatorRoomId(client.user, user);
-    const targetRoomId = this.getTargetRoomId(user, client.user);
+    if (
+      (client.user.role !== UserRoles.OWNER && user.role === UserRoles.OWNER) ||
+      client.user.role === UserRoles.OWNER
+    ) {
+      const creatorRoomId = this.getCreatorRoomId(client.user, user);
+      const targetRoomId = this.getTargetRoomId(user, client.user);
 
-    let conversationDocObj: ConversationDocObj;
+      let conversationDocObj: ConversationDocObj;
 
-    const result = await this.firebase.firestore
-      .collection(this.conversationCollection)
-      .where(
-        Filter.or(
-          Filter.where('roomId', '==', creatorRoomId),
-          Filter.where('roomId', '==', targetRoomId),
-        ),
-      )
-      .get();
-
-    if (result.empty) {
-      const doc: ConversationDocObj = {
-        id: uuid(),
-        creatorId: client.user.id,
-        targetId: user.id,
-        roomId: creatorRoomId,
-        isCreatorTyping: false,
-        isTargetTyping: false,
-        contributors: [client.user.id],
-        lastMessage: null,
-        createdAt: FieldValue.serverTimestamp(),
-        updatedAt: FieldValue.serverTimestamp(),
-        deletedAt: null,
-        deletedBy: null,
-      };
-
-      await this.firebase.firestore
+      const result = await this.firebase.firestore
         .collection(this.conversationCollection)
-        .doc(creatorRoomId)
-        .set(doc);
+        .where(
+          Filter.or(
+            Filter.where('roomId', '==', creatorRoomId),
+            Filter.where('roomId', '==', targetRoomId),
+          ),
+        )
+        .get();
 
-      conversationDocObj = doc;
-    } else {
-      const [doc] = result.docs;
-      const docData = doc.data() as ConversationDocObj;
-
-      await this.firebase.firestore
-        .collection(this.conversationCollection)
-        .doc(docData.roomId)
-        .update({
-          contributors: FieldValue.arrayUnion(client.user.id),
+      if (result.empty) {
+        const doc: ConversationDocObj = {
+          id: uuid(),
+          creatorId: client.user.id,
+          targetId: user.id,
+          roomId: creatorRoomId,
+          isCreatorTyping: false,
+          isTargetTyping: false,
+          contributors: [client.user.id],
+          lastMessage: null,
+          createdAt: FieldValue.serverTimestamp(),
           updatedAt: FieldValue.serverTimestamp(),
-        });
+          deletedAt: null,
+          deletedBy: null,
+        };
 
-      conversationDocObj = docData;
+        await this.firebase.firestore
+          .collection(this.conversationCollection)
+          .doc(creatorRoomId)
+          .set(doc);
+
+        conversationDocObj = doc;
+      } else {
+        const [doc] = result.docs;
+        const docData = doc.data() as ConversationDocObj;
+
+        await this.firebase.firestore
+          .collection(this.conversationCollection)
+          .doc(docData.roomId)
+          .update({
+            contributors: FieldValue.arrayUnion(client.user.id),
+            updatedAt: FieldValue.serverTimestamp(),
+          });
+
+        conversationDocObj = docData;
+      }
+
+      const plainUser = plainToClass(UserDto, user, {
+        excludeExtraneousValues: true,
+      }) as unknown as User;
+
+      return new Conversation(plainUser, conversationDocObj);
+    } else {
+      throw new WebSocketException('Could not start a conversation.');
     }
-
-    const plainUser = plainToClass(UserDto, user, {
-      excludeExtraneousValues: true,
-    }) as unknown as User;
-
-    return new Conversation(plainUser, conversationDocObj);
   }
 
   @UsePipes(new WsValidationPipe('start-conversation'))
@@ -294,7 +302,7 @@ export class ChatGateWay implements OnGatewayConnection {
           }
         } catch (error) {}
       } else {
-        throw new Error('No document was found.');
+        throw new WebSocketException('No document was found.');
       }
     } catch (error) {
       throw new WsException('send-message', error.message);
