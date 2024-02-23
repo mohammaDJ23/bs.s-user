@@ -5,10 +5,11 @@ import {
   SubscribeMessage,
   WebSocketGateway,
   WebSocketServer,
+  WsException as WebSocketException,
 } from '@nestjs/websockets';
 import { Inject, UseFilters, UseGuards, UsePipes } from '@nestjs/common';
 import { Server } from 'socket.io';
-import { classToPlain, plainToClass } from 'class-transformer';
+import { plainToClass } from 'class-transformer';
 import { v4 as uuid } from 'uuid';
 import { FirebaseIdTokenGuard, JwtSocketGuard } from 'src/guards';
 import { FirebaseAdmin, InjectFirebaseAdmin } from 'nestjs-firebase';
@@ -28,7 +29,7 @@ import {
 import { WsFilter } from 'src/filters';
 import { WsException } from 'src/exceptions';
 import { WsValidationPipe } from 'src/pipes';
-import { NotificationPayloadObj, Socket, UserObj } from 'src/types';
+import { NotificationPayloadObj, Socket, UserObj, UserRoles } from 'src/types';
 import { ClientProxy } from '@nestjs/microservices';
 
 export interface CreatedMessagePayloadObj extends UserObj {
@@ -108,17 +109,13 @@ export class ChatGateWay implements OnGatewayConnection {
     return `${target.id}.${creator.id}`;
   }
 
-  @UsePipes(new WsValidationPipe('start-conversation'))
-  @UseFilters(WsFilter)
-  @UseGuards(JwtSocketGuard, FirebaseIdTokenGuard)
-  @SubscribeMessage('start-conversation')
-  async startConversation(
-    @ConnectedSocket() client: Socket,
-    @MessageBody() data: StartConversationDto,
-  ) {
-    try {
-      const user = await this.userService.findByIdOrFail(data.id);
+  async createNewConversation(client: Socket, data: StartConversationDto) {
+    const user = await this.userService.findByIdOrFail(data.id);
 
+    if (
+      (client.user.role !== UserRoles.OWNER && user.role === UserRoles.OWNER) ||
+      client.user.role === UserRoles.OWNER
+    ) {
       const creatorRoomId = this.getCreatorRoomId(client.user, user);
       const targetRoomId = this.getTargetRoomId(user, client.user);
 
@@ -175,12 +172,40 @@ export class ChatGateWay implements OnGatewayConnection {
         excludeExtraneousValues: true,
       }) as unknown as User;
 
-      client.emit(
-        'start-conversation',
-        new Conversation(plainUser, conversationDocObj),
-      );
+      return new Conversation(plainUser, conversationDocObj);
+    } else {
+      throw new WebSocketException('Could not start a conversation.');
+    }
+  }
+
+  @UsePipes(new WsValidationPipe('start-conversation'))
+  @UseFilters(WsFilter)
+  @UseGuards(JwtSocketGuard, FirebaseIdTokenGuard)
+  @SubscribeMessage('start-conversation')
+  async startConversation(
+    @ConnectedSocket() client: Socket,
+    @MessageBody() data: StartConversationDto,
+  ) {
+    try {
+      const conversation = await this.createNewConversation(client, data);
+      client.emit('start-conversation', conversation);
     } catch (error) {
       throw new WsException('start-conversation', error.message);
+    }
+  }
+
+  @UsePipes(new WsValidationPipe('start-conversation-with-ack'))
+  @UseFilters(WsFilter)
+  @UseGuards(JwtSocketGuard, FirebaseIdTokenGuard)
+  @SubscribeMessage('start-conversation-with-ack')
+  async startConversationWithAck(
+    @ConnectedSocket() client: Socket,
+    @MessageBody() data: StartConversationDto,
+  ) {
+    try {
+      return await this.createNewConversation(client, data);
+    } catch (error) {
+      throw new WsException('start-conversation-with-ack', error.message);
     }
   }
 
@@ -277,7 +302,7 @@ export class ChatGateWay implements OnGatewayConnection {
           }
         } catch (error) {}
       } else {
-        throw new Error('No document was found.');
+        throw new WebSocketException('No document was found.');
       }
     } catch (error) {
       throw new WsException('send-message', error.message);
