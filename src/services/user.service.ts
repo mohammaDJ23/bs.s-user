@@ -452,22 +452,19 @@ export class UserService {
     return this.userRepository.query(
       `
         WITH lastWeek (date) AS (
-          VALUES
-            (NOW()),
-            (NOW() - INTERVAL '1 DAY'),
-            (NOW() - INTERVAL '2 DAY'),
-            (NOW() - INTERVAL '3 DAY'),
-            (NOW() - INTERVAL '4 DAY'),
-            (NOW() - INTERVAL '5 DAY'),
-            (NOW() - INTERVAL '6 DAY')
+          SELECT t.day::date FROM generate_series(
+            (NOW() - INTERVAL '1 YEAR')::timestamp,
+            NOW()::timestamp,
+            '1 day'::interval
+          ) as t(day)
         )
         SELECT
           COALESCE(EXTRACT(EPOCH FROM lastWeek.date) * 1000, 0)::BIGINT AS date,
           COUNT(public.user.created_at)::INTEGER as count
         FROM lastWeek
-        FULL JOIN 
-          public.user ON to_char(lastWeek.date, 'YYYY-MM-DD') = to_char(public.user.created_at, 'YYYY-MM-DD') AND 
-          public.user.deleted_at IS NULL
+        FULL JOIN public.user ON 
+          to_char(lastWeek.date, 'YYYY-MM-DD') = to_char(public.user.created_at, 'YYYY-MM-DD') AND
+            public.user.deleted_at IS NULL
         WHERE lastWeek.date IS NOT NULL
         GROUP BY lastWeek.date
         ORDER BY lastWeek.date ASC;
