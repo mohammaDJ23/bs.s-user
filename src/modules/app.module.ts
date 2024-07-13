@@ -93,7 +93,7 @@ import { join } from 'path';
         database: process.env.DATABASE_NAME,
         namingStrategy: new CustomNamingStrategy(),
         entities: [User],
-        synchronize: true,
+        synchronize: process.env.NODE_ENV === 'development',
       }),
     }),
     TypeOrmModule.forFeature([User]),
