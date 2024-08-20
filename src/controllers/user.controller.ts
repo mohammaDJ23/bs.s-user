@@ -21,7 +21,7 @@ import {
   UpdateUserByOwnerDto,
   ErrorDto,
   UserQuantitiesDto,
-  LastWeekDto,
+  LastYearDto,
   AccessTokenDto,
   UserListFiltersDto,
   DeletedUserListFiltersDto,
@@ -51,7 +51,7 @@ import { User } from 'src/entities';
 import { UserRoles } from 'src/types';
 import { ParseUserListFiltersPipe } from 'src/pipes';
 import {
-  LastWeekUsersSerializerInterceptor,
+  LastYearUsersSerializerInterceptor,
   UsersSerializerInterceptor,
   UserSerializerInterceptor,
   UserQuantitiesSerializerInterceptor,
@@ -247,18 +247,18 @@ export class userController {
     return this.userService.quantitiesDeleted();
   }
 
-  @Get('last-week')
+  @Get('last-year')
   @HttpCode(HttpStatus.OK)
   @Roles(UserRoles.OWNER, UserRoles.ADMIN)
   @UseGuards(RolesGuard)
-  @UseInterceptors(LastWeekUsersSerializerInterceptor)
+  @UseInterceptors(LastYearUsersSerializerInterceptor)
   @ApiBearerAuth()
-  @ApiResponse({ status: HttpStatus.OK, type: LastWeekDto })
+  @ApiResponse({ status: HttpStatus.OK, type: LastYearDto })
   @ApiResponse({ status: HttpStatus.UNAUTHORIZED, type: ErrorDto })
   @ApiResponse({ status: HttpStatus.NOT_FOUND, type: ErrorDto })
   @ApiResponse({ status: HttpStatus.INTERNAL_SERVER_ERROR, type: ErrorDto })
-  lastWeek(): Promise<LastWeekDto[]> {
-    return this.userService.lastWeek();
+  lastYear(): Promise<LastYearDto[]> {
+    return this.userService.lastYear();
   }
 
   @Get(':id')

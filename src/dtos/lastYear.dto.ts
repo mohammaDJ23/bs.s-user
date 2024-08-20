@@ -1,7 +1,7 @@
 import { Expose, Transform } from 'class-transformer';
 import { ApiProperty } from '@nestjs/swagger';
 
-export class LastWeekDto {
+export class LastYearDto {
   @Expose()
   @ApiProperty()
   count: number;
