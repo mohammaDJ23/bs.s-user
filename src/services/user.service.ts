@@ -11,7 +11,7 @@ import {
   CreateUserDto,
   UpdateUserByUserDto,
   UserQuantitiesDto,
-  LastWeekDto,
+  LastYearDto,
   UpdateUserByOwnerDto,
   UpdateUserDto,
 } from '../dtos';
@@ -448,10 +448,10 @@ export class UserService {
       .getRawOne();
   }
 
-  lastWeek(): Promise<LastWeekDto[]> {
+  lastYear(): Promise<LastYearDto[]> {
     return this.userRepository.query(
       `
-        WITH lastWeek (date) AS (
+        WITH lastYear (date) AS (
           SELECT t.day::date FROM generate_series(
             (NOW() - INTERVAL '1 YEAR')::timestamp,
             NOW()::timestamp,
@@ -459,15 +459,15 @@ export class UserService {
           ) as t(day)
         )
         SELECT
-          COALESCE(EXTRACT(EPOCH FROM lastWeek.date) * 1000, 0)::BIGINT AS date,
+          COALESCE(EXTRACT(EPOCH FROM lastYear.date) * 1000, 0)::BIGINT AS date,
           COUNT(public.user.created_at)::INTEGER as count
-        FROM lastWeek
+        FROM lastYear
         FULL JOIN public.user ON 
-          to_char(lastWeek.date, 'YYYY-MM-DD') = to_char(public.user.created_at, 'YYYY-MM-DD') AND
+          to_char(lastYear.date, 'YYYY-MM-DD') = to_char(public.user.created_at, 'YYYY-MM-DD') AND
             public.user.deleted_at IS NULL
-        WHERE lastWeek.date IS NOT NULL
-        GROUP BY lastWeek.date
-        ORDER BY lastWeek.date ASC;
+        WHERE lastYear.date IS NOT NULL
+        GROUP BY lastYear.date
+        ORDER BY lastYear.date ASC;
       `,
     );
   }
