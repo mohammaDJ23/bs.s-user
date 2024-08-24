@@ -217,9 +217,13 @@ export class userController {
   @ApiResponse({ status: HttpStatus.UNAUTHORIZED, type: ErrorDto })
   @ApiResponse({ status: HttpStatus.INTERNAL_SERVER_ERROR, type: ErrorDto })
   findAllDeleted(
-    @Query('page', ParseIntPipe) page: number,
-    @Query('take', ParseIntPipe) take: number,
-    @Query('filters', ParseUserListFiltersPipe)
+    @Query('page', new DefaultValuePipe(1), ParseIntPipe) page: number,
+    @Query('take', new DefaultValuePipe(10), ParseIntPipe) take: number,
+    @Query(
+      'filters',
+      new DefaultValuePipe(new DeletedUserListFiltersDto()),
+      ParseUserListFiltersPipe,
+    )
     filters: DeletedUserListFiltersDto,
   ): Promise<[User[], number]> {
     return this.userService.findAllDeleted(page, take, filters);

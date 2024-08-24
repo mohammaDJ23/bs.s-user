@@ -7,5 +7,5 @@ export class DeletedUserListFiltersDto extends UserListFiltersDto {
   @Type(() => Number)
   @IsNumber()
   @ApiProperty()
-  deletedDate: number;
+  deletedDate: number = 0;
 }
