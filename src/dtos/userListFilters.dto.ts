@@ -24,11 +24,11 @@ export class UserListFiltersDto {
   @IsNumber()
   @IsOptional()
   @ApiProperty()
-  fromDate: number | null = null;
+  fromDate: number = 0;
 
   @Type(() => Number)
   @IsNumber()
   @IsOptional()
   @ApiProperty()
-  toDate: number | null = null;
+  toDate: number = 0;
 }
