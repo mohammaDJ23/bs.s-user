@@ -347,11 +347,11 @@ export class UserService {
         'CASE WHEN ARRAY_LENGTH((:ids)::INT[], 1) > 0 THEN user.id = ANY(:ids) ELSE TRUE END',
       )
       .setParameters({
-        q: filters.q || '',
-        roles: filters.roles || Object.values(UserRoles),
-        fromDate: filters.fromDate || 0,
-        toDate: filters.toDate || 0,
-        ids: filters.ids || [],
+        q: filters.q,
+        roles: filters.roles,
+        fromDate: filters.fromDate,
+        toDate: filters.toDate,
+        ids: filters.ids,
       })
       .getManyAndCount();
   }
